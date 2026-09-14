@@ -1349,17 +1349,19 @@ window.ZH_READY.then(function (Z) {
   // with no hostile act read (the extractor's "scout" / "move") has its target "unknown" - no intent read into it
   // (the user: "how do you know that's what that raid was for? Don't overclaim")
   const RAW_TI = new Map(D.templates.map((t, i) => [t.raw, i]));   // the raids' template names -> the page's templates, for playName
-  const RAID_UNITS = new Map();   // a composition's key -> its name, once
+  const RAID_UNITS = new Map(), RAID_COMP = new WeakMap();   // a composition's key -> its name, once; and by the composition itself (the raids file is parsed once, its arrays stay)
   const raidUnits = (RD, comp) => {   // the group named like a play ("Terror Tech", "Dozer Drop", "2 Gatling Tanks"), else its commonest unit
     if (!Array.isArray(comp)) return RD.units[comp] || 'units';
+    let name = RAID_COMP.get(comp); if (name !== undefined) return name;
     const upg = comp[1] >= 0 ? RD.upgs[comp[1]] || '' : '', key = upg + '|' + comp.slice(2).map(e => e.join(':')).join(',');
-    let name = RAID_UNITS.get(key);
+    name = RAID_UNITS.get(key);
     if (name === undefined) {
       const ents = comp.slice(2).map(([u, k, c]) => ({ ti: RD.ti[u], k, ci: c >= 0 ? RD.ti[c] : -1 }));
       const n = ents.reduce((a, e) => a + e.k, 0);
       name = ents.length && ents.every(e => e.ti >= 0) ? playName(ents, n, upg) : null;
       RAID_UNITS.set(key, name = name || RD.units[comp[0]] || 'units');
     }
+    RAID_COMP.set(comp, name);
     return name;
   };
   const sortieItem = (kind, name) => {
@@ -1369,10 +1371,14 @@ window.ZH_READY.then(function (Z) {
     return it;
   };
   const RAID_STRUCT = new Set(['supply', 'production', 'tech', 'power', 'defense', 'tunnel', 'cc', 'structure_other', 'enemy_derrick']);   // named by the template; a garrison stays "Garrison ...", not "Wood Tower"
+  const RAID_ROW = new Map();   // per naming (PL.SID: the items are a store per naming), a row -> its two items, once
   const itemsOfSortie = (RD, row) => {
+    let m = RAID_ROW.get(PL.SID); if (!m) RAID_ROW.set(PL.SID, m = new WeakMap());
+    let out = m.get(row); if (out) return out;
     const k = RD.keys[row[1]], tt = row[5] >= 0 ? RD.units[row[5]] : null;
     const t = k === 'scout' || k === 'move' ? 'unknown' : k === 'build_deny' ? (tt ? tt + ' Scaffold Reset' : 'Scaffold Reset') : tt && RAID_STRUCT.has(k) ? tt : RD.fams[row[1]] || 'unknown';
-    return [sortieItem('u', raidUnits(RD, row[4])), sortieItem('t', t)];
+    m.set(row, out = [sortieItem('u', raidUnits(RD, row[4])), sortieItem('t', t)]);
+    return out;
   };
   const isLight = () => document.documentElement.dataset.theme === 'light';
   // the terrain as an image the size of the grid, by the Terrain choice: relief = grey by height, water blue, cliffs a
@@ -1535,18 +1541,28 @@ window.ZH_READY.then(function (Z) {
   }
   // the placements gathered into spots, per structure
   function mapSpots(cells, R) {
-    const { X, Y, T, SI, CI } = cells, groups = new Map();
+    const { X, Y, T, SI, CI } = cells, groups = new Map();   // per structure (its item: the colour index wraps past the shades)
     for (let i = 0; i < X.length; i++) {
-      const g = CI[i] + '|' + T[i].key; let G = groups.get(g); if (!G) groups.set(g, G = { ci: CI[i], it: T[i], cells: new Map() });
+      let G = groups.get(T[i]); if (!G) groups.set(T[i], G = { ci: CI[i], it: T[i], cells: new Map() });
       const c = Y[i] * R.w + X[i]; let L = G.cells.get(c); if (!L) G.cells.set(c, L = []); L.push(i);
     }
-    const spots = [], r2 = MAP_SPOT_R() * MAP_SPOT_R();
+    // the seeds in buckets of the reach: a cell's seed within reach, and its nearest seed, are in its own bucket
+    // or the eight around it (every cell has a seed within reach - it would be one otherwise); a scan of every
+    // seed per cell was 250 ms at the smallest reach (2026-09-15)
+    const spots = [], r = MAP_SPOT_R(), r2 = r * r, bw = Math.ceil(R.w / r) + 2;   // a bucket per reach, a margin of one around the grid
     for (const G of groups.values()) {
-      const order = [...G.cells.entries()].map(([c, L]) => [c % R.w, Math.floor(c / R.w), L]).sort((a, b) => b[2].length - a[2].length), seeds = [];
-      for (const [x, y] of order) if (!seeds.some(s => (s.x - x) * (s.x - x) + (s.y - y) * (s.y - y) < r2)) seeds.push({ x, y, n: 0, sx: 0, sy: 0, seats: new Set() });
+      const order = [...G.cells.entries()].map(([c, L]) => [c % R.w, Math.floor(c / R.w), L]).sort((a, b) => b[2].length - a[2].length), seeds = [], buckets = new Map();
+      const bucket = (x, y) => (Math.floor(y / r) + 1) * bw + Math.floor(x / r) + 1;
+      const near = (x, y, fn) => { const b = bucket(x, y); for (let j = -bw; j <= bw; j += bw) for (let i = -1; i <= 1; i++) { const B = buckets.get(b + j + i); if (B) for (const s of B) fn(s); } };
+      for (const [x, y] of order) {
+        let taken = false; near(x, y, s => { if (!taken && (s.x - x) * (s.x - x) + (s.y - y) * (s.y - y) < r2) taken = true; });
+        if (taken) continue;
+        const s = { x, y, i: seeds.length, n: 0, sx: 0, sy: 0, seats: new Set() }, b = bucket(x, y);
+        seeds.push(s); let B = buckets.get(b); if (!B) buckets.set(b, B = []); B.push(s);
+      }
       for (const [x, y, L] of order) {
         let best = null, bd = Infinity;
-        for (const s of seeds) { const d = (s.x - x) * (s.x - x) + (s.y - y) * (s.y - y); if (d < bd) { bd = d; best = s; } }
+        near(x, y, s => { const d = (s.x - x) * (s.x - x) + (s.y - y) * (s.y - y); if (d < bd || (d === bd && s.i < best.i)) { bd = d; best = s; } });   // a tie goes to the fuller seed, as the scan did
         best.n += L.length; best.sx += x * L.length; best.sy += y * L.length; for (const i of L) best.seats.add(SI[i]);
       }
       const total = order.reduce((a, o) => a + o[2].length, 0), few = total < MAP_SPOT_FEW || !seeds.some(s => s.seats.size >= MAP_SPOT_MIN);
@@ -1727,10 +1743,10 @@ window.ZH_READY.then(function (Z) {
     else if (e.target.dataset.mfrank !== undefined || e.target.dataset.mfsel !== undefined) Z.mapFacetAct(e.target.dataset, e.target);
   });
   $('mapwrap').addEventListener('click', e => { const b = e.target.closest('button'); if (b && b.dataset.mapto === undefined) Z.mapFacetAct(b.dataset, b); });
-  const MAP_LAST = { key: null };
+  const MAP_LAST = { key: null }, MAP_CELLS = { key: null, cells: null };   // the drawing's key, and the cells' own (a slider redraws; the cells stay)
   let MAP_COL = false;
   {
-    const tick = setInterval(() => { const el = document.querySelector('#mapwrap .reading'); if (el) el.textContent = `loading the map data\u2026 ${Math.round(((D.laterProgress || {}).map || 0) * 100)}%`; }, 300);
+    const tick = setInterval(() => { const el = document.querySelector('#mapwrap .reading'); if (el) Z.progressSet(el, 'loading the map data\u2026', (D.laterProgress || {}).map || 0); }, 300);
     D.later.map.then(() => { clearInterval(tick); MAP_COL = true; if (PAINTED) renderMap(MAP_SEATS); }, err => { clearInterval(tick); console.error(err); const el = document.querySelector('#mapwrap .reading'); if (el) el.textContent = 'the map data did not load: ' + err; });
   }
   function renderMap(seats) {
@@ -1759,7 +1775,7 @@ window.ZH_READY.then(function (Z) {
     seg($('mapsp'), spOpts, S.mapSp, 'data-mapsp');
     $('mapsp').parentElement.hidden = !M || spawns.size < 2;
     if (!M) {
-      MAP = null; MAP_LAST.key = null;
+      MAP = null; MAP_LAST.key = MAP_CELLS.key = null;
       $('mapkinds').innerHTML = ''; $('mapt').innerHTML = ''; $('maplegend').innerHTML = '';
       $('mapkinds').hidden = $('mapt').hidden = $('maptwrap').hidden = true;   // the structure rows keep a fixed height: a hole above the pick otherwise (the user, 2026-09-14)
       const cv = $('mapcv'); cv.hidden = true;
@@ -1775,18 +1791,24 @@ window.ZH_READY.then(function (Z) {
     }
     const old = wrap.querySelector('.empty'); if (old) old.remove();
     if (!MAP_COL) {   // the placements' cells come in a column of their own after the first paint (data.js ZH_COLS_LATER)
-      MAP = null; MAP_LAST.key = null; $('mapcv').hidden = true; $('mapkinds').hidden = $('mapt').hidden = $('maptwrap').hidden = true;
-      wrap.insertAdjacentHTML('beforeend', `<div class="empty reading">loading the map data\u2026 ${Math.round(((D.laterProgress || {}).map || 0) * 100)}%</div>`);
+      MAP = null; MAP_LAST.key = MAP_CELLS.key = null; $('mapcv').hidden = true; $('mapkinds').hidden = $('mapt').hidden = $('maptwrap').hidden = true;
+      wrap.insertAdjacentHTML('beforeend', `<div class="empty reading">${Z.progressHTML('loading the map data\u2026', (D.laterProgress || {}).map || 0)}</div>`);
       $('map-note').textContent = ''; $('maptitle').innerHTML = esc(M.name); return;
     }
     $('mapcv').hidden = false; $('mapkinds').hidden = $('mapt').hidden = false;
     $('maptitle').innerHTML = `${esc(M.name)} <small>(by ${fmtT(S.mapBy)})</small>`;
-    const key = [M.id, S.mapBy, S.mapKinds.join(','), S.mapT.join(','), S.mapOpen, S.mapDraw, MAP_FLOW(), MAP_GRAIN(), MAP_PAL(), MAP_TINT(), S.mapSpotR, S.mapBlur, S.mapSp, isLight(), N, MAP_BUILD ? S.focus.key : ''].join('|');
+    // the cells' key: what mapCells reads (the entry points of the raids are cells only with the raids on and drawn as entries);
+    // the drawing's key adds what drawMap reads. A slider (blur, grouping, grain) changes only the second, so the cells
+    // (110-170 ms of the ~250 ms a slider step cost, 2026-09-15) are kept and the map only redraws
+    const ck = [M.id, S.mapBy, S.mapKinds.join(','), S.mapT.join(','), S.mapSp, MAP_KIND_ON('sorties') && MAP_FLOW() === 'entry', seatsKey(), N, MAP_BUILD ? S.focus.key : ''].join('|');
+    const key = [ck, S.mapOpen, S.mapDraw, MAP_FLOW(), MAP_GRAIN(), MAP_PAL(), MAP_TINT(), S.mapSpotR, S.mapBlur, isLight()].join('|');
     Promise.all([raster(M.crc), raids(M.crc)]).then(([R, RD]) => {
       if (!R) { $('mapkinds').innerHTML = ''; $('mapt').innerHTML = ''; $('mapkinds').hidden = $('mapt').hidden = $('maptwrap').hidden = true; $('mapcv').hidden = true; wrap.insertAdjacentHTML('beforeend', `<div class="empty">no terrain for ${esc(M.name)} - its map file is not among the maps installed for resim</div>`); $('map-note').textContent = ''; return; }
       if (MAP_LAST.key === key && MAP) return;
       MAP_LAST.key = key;
-      const t0 = performance.now(), cells = mapCells(seats, R, RD);
+      const t0 = performance.now();
+      if (MAP_CELLS.key !== ck) { MAP_CELLS.cells = mapCells(seats, R, RD); MAP_CELLS.key = ck; }
+      const cells = MAP_CELLS.cells;
       // a group chip toggles the group; the arrow glued to it expands the group into the row below (the user,
       // 2026-09-14: "another way to click on the top row filter that expands it rather than selecting")
       const open = MAP_OPEN(), narrowed = new Set(S.mapT.map(k => k.slice(0, k.indexOf('|'))));
@@ -1970,10 +1992,17 @@ window.ZH_READY.then(function (Z) {
     el.max = n - 1; el.value = i;
     $('mapby').nextElementSibling.innerHTML = MAP_CLOCKS.map(([v, l], k) => `<span class="${k === i ? 'on' : ''}" style="left:${(k / Math.max(1, n - 1) * 100).toFixed(2)}%">${l}</span>`).join('');
   }
-  $('mapby').addEventListener('input', e => { S.mapBy = MAP_CLOCKS[+e.target.value][0]; renderMapClock(); $('clock-map').textContent = 'by ' + fmtT(S.mapBy); renderMap(MAP_SEATS); Z.persistPage('zh-bo-page', 2, S); });
-  $('mapspotr').addEventListener('input', e => { S.mapSpotR = +e.target.value; renderMap(MAP_SEATS); Z.persistPage('zh-bo-page', 2, S); });
-  $('mapblur').addEventListener('input', e => { S.mapBlur = +e.target.value; renderMap(MAP_SEATS); Z.persistPage('zh-bo-page', 2, S); });
-  $('mapgrain').addEventListener('input', e => { S.mapGrain = +e.target.value; renderMap(MAP_SEATS); Z.persistPage('zh-bo-page', 2, S); });
+  // a slider's drag fires input faster than the map draws: the state moves with every event, the map redraws once
+  // per frame on the latest value (each event drew synchronously and the drag lagged behind, 2026-09-15)
+  let MAP_TICK = 0;
+  const mapSlide = (id, set) => $(id).addEventListener('input', e => {
+    set(+e.target.value);
+    if (!MAP_TICK) MAP_TICK = requestAnimationFrame(() => { MAP_TICK = 0; renderMap(MAP_SEATS); Z.persistPage('zh-bo-page', 2, S); });
+  });
+  mapSlide('mapby', v => { S.mapBy = MAP_CLOCKS[v][0]; renderMapClock(); $('clock-map').textContent = 'by ' + fmtT(S.mapBy); });
+  mapSlide('mapspotr', v => { S.mapSpotR = v; });
+  mapSlide('mapblur', v => { S.mapBlur = v; });
+  mapSlide('mapgrain', v => { S.mapGrain = v; });
   // a render: the controls at once, then the heavy pass the click needs (the records for a new window or naming,
   // the descriptions the selection lacks) in slices behind the strip when it is big, then the cards. A click while
   // a pass runs starts over from where the records stand (JOB: the pass in flight gives way)

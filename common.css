@@ -80,21 +80,43 @@
   /* the random-subset note (?games= / ?pct=), beside the stamp */
   header .stamp .subset { display: inline-flex; align-items: center; gap: 6px; margin-right: 12px; padding: 2px 8px; border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink-2); }
   header .stamp .subset b { color: var(--ink); font-weight: 600; }
-  header .stamp .subset .all { background: none; border: 1px solid var(--line-strong); border-radius: 3px; padding: 1px 6px; color: var(--ink-2); font-size: 11px; cursor: pointer; }
-  header .stamp .subset .all:hover { color: var(--ink); border-color: var(--accent); }
+  header .stamp .subset .share { background: var(--raised); border: 1px solid var(--line-strong); border-radius: 3px; padding: 1px 4px; color: var(--ink-2); font: inherit; font-size: 11px; cursor: pointer; }
+  header .stamp .subset .share:hover { color: var(--ink); border-color: var(--accent); }
+  header .tour { background: none; border: 1px solid var(--line-strong); border-radius: 3px; padding: 4px 10px; color: var(--ink-2); font-size: 12px; cursor: pointer; align-self: center; }
+  header .tour:hover { color: var(--ink); border-color: var(--accent); }
+  /* the tour: a spotlight over one element (its shadow dims the rest) and a line of text beside it */
+  #tour { position: fixed; inset: 0; z-index: 70; }
+  #tour .dim { position: fixed; inset: 0; background: rgba(0, 0, 0, .55); }
+  #tour .spot { position: fixed; border: 2px solid var(--accent); border-radius: 6px; pointer-events: none; transition: left .2s, top .2s, width .2s, height .2s; }
+  #tour.lost .spot { display: none; }
+  #tour.lost .dim { clip-path: none; }
+  #tour .box { position: fixed; max-width: 260px; padding: 10px 12px; background: var(--raised); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 6px; box-shadow: 0 8px 30px rgba(0, 0, 0, .35); font-size: 14px; line-height: 1.35; }
+  #tour .box .nav { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  #tour .box .n { color: var(--muted); font-size: 11px; margin-right: auto; }
+  #tour .box button { background: none; border: 1px solid var(--line-strong); border-radius: 3px; padding: 2px 8px; color: var(--ink-2); font-size: 12px; cursor: pointer; }
+  #tour .box button:hover:not(:disabled) { color: var(--ink); border-color: var(--accent); }
+  #tour .box button:disabled { opacity: .4; cursor: default; }
+  #tour .box .next { background: var(--accent); border-color: var(--accent); color: #fff; }
+  body.printing #tour { display: none !important; }
   /* full-page veil while the data script parses and the first render runs */
   .loading { position: fixed; inset: 0; z-index: 50; background: var(--ground); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--ink-2); font-size: 13px; }
   .loading .disp { font-size: 30px; font-weight: 700; letter-spacing: .02em; color: var(--ink); }
   .loading .disp span { color: var(--accent); }
-  .loading .spin { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line-strong); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+  /* the spinner, one look everywhere: sized by where it sits */
+  .spin { border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--accent); animation: spin .8s linear infinite; flex: none; }
+  .loading .spin { width: 28px; height: 28px; border-width: 3px; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  /* the progress element (common.js progressHTML): spinner, message, percentage when known */
+  .progress { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 13px; }
+  .progress .spin { width: 16px; height: 16px; }
+  .progress .pct { color: var(--ink); font-weight: 600; min-width: 3ch; text-align: right; }
   .loading .prog { width: 280px; max-width: 80vw; height: 4px; border-radius: 2px; background: var(--line-strong); overflow: hidden; }
   .loading .prog i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s linear; }
   .loading .phase { font-size: 12px; color: var(--ink-2); opacity: .8; max-width: 360px; text-align: center; line-height: 1.4; }
   /* the strip along the bottom while a pass runs in slices (common.js working()): what it does and how far it is */
   #working { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex; align-items: center; gap: 10px; padding: 6px 16px; background: var(--surface); border-top: 1px solid var(--line); color: var(--ink-2); font-size: 12px; }
   #working[hidden] { display: none; }
-  #working .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--accent); animation: spin .8s linear infinite; flex: none; }
+  #working .spin { width: 14px; height: 14px; }
   #working .prog { flex: 1; max-width: 320px; height: 4px; border-radius: 2px; background: var(--line-strong); overflow: hidden; }
   #working .prog i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s linear; }
   body.printing #working { display: none !important; }

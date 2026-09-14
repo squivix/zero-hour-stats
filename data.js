@@ -80,11 +80,15 @@ window.ZH_DATA = (async function () {
     for (const k of ['games', 'pct', 'seed']) q.delete(k);
     if (n) { q.set(mode, mode === 'games' ? String(n) : String(pct)); q.set('seed', String(seed)); }
     if (url.href !== location.href) { try { history.replaceState(history.state, '', url.href); } catch (e) { /* file: or a sandbox */ } }
-    const search = url.search;
+    // the query the nav links carry between pages: the draw, not a one-shot flag like ?tour
+    const lq = new URLSearchParams(url.search); lq.delete('tour');
+    const search = lq.toString() ? '?' + lq : '';
     window.ZH_SUBSET = {
       n, total: nGames, seed, active: !!n,
       link: to => { const [path, hash] = to.split('#'); return path + (n ? search : '') + (hash ? '#' + hash : ''); },
       clear: () => { location.href = location.pathname + location.hash; },
+      // reload on a share of the games (the header's picker): the same seed when one is drawn, else a fresh one
+      set: pct => { const p = new URLSearchParams(); p.set('pct', String(pct)); p.set('seed', String(seed != null ? seed : Math.floor(Math.random() * 4294967296))); location.href = location.pathname + '?' + p + location.hash; },
     };
     if (!n) return null;
     // mulberry32 on the seed

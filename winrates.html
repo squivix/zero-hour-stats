@@ -548,7 +548,7 @@ window.ZH_READY.then(function (Z) {
     const all = !!P.all && S[P.all] === 'all', top_n = all ? Infinity : TOP_DYN;   // Show: All lists every name, most games first, in a scrolling facet
     if (P.all) { seg($(P.all), [['top', `Top ${TOP_DYN}`], ['all', 'All']], S[P.all], `data-${P.all}`); $(P.el).classList.toggle('all', all); }
     $('clock-' + P.by).textContent = 'by ' + CLK(S[P.by]);
-    if (!READS_ON) { $(P.el).innerHTML = `<div class="empty reading">${esc(readsNote())}</div>`; $(P.note).textContent = ''; return; }
+    if (!READS_ON) { $(P.el).innerHTML = `<div class="empty reading">${Z.progressHTML(readsNote(), readsAt)}</div>`; $(P.note).textContent = ''; return; }
     const mergeAll = F.merge === 'all';
     const rows = READS.map((r, i) => {
       if (r[0] !== pane) return null;
@@ -998,8 +998,8 @@ window.ZH_READY.then(function (Z) {
   // --- units --------------------------------------------------------------------
   // what the read cards say while their values are not there: the column on its way, then the pass over the seats
   let readsAt = 0, readsPhase = 'load';
-  const readsNote = () => readsPhase === 'load' ? `loading the opening data\u2026 ${Math.round(readsAt * 100)}%` : `reading the openings of the selection\u2026 ${Math.round(readsAt * 100)}%`;
-  const readsTell = () => { const t = readsNote(); document.querySelectorAll('.reading').forEach(el => { el.textContent = t; }); };
+  const readsNote = () => readsPhase === 'load' ? 'loading the opening data\u2026' : 'reading the openings of the selection\u2026';
+  const readsTell = () => { const t = readsNote(); document.querySelectorAll('.reading').forEach(el => Z.progressSet(el, t, readsAt)); };
   // the seats the pass would read for the panes' clocks and have not been (their values are kept per clock): the
   // pass over the whole library is ~3 s, so past a few thousand it runs in slices behind the strip rather than in
   // one block on the click (the user, 2026-09-14: a clock switched, a filter off - slow)

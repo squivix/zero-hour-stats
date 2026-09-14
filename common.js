@@ -465,8 +465,8 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     $('rail').innerHTML = `
       <div class="grp">
         <div class="grp-h"><span class="lbl">Level</span></div>
-        <div class="chips">${LEVELS.map(([k, l]) => chip(l, F.level === k, `data-level="${k}"`)).join('')}</div>
-        <div class="hint">High: everyone GeneralsOnline ${HIGH_ELO}+, or a GameReplays tournament / expert / gold / ROTW game. Low: everyone under ${LOW_ELO}; no GameReplays games.</div>
+        <div class="chips">${LEVELS.filter(([k]) => k !== 'low' || F.level === 'low').map(([k, l]) => chip(l, F.level === k, `data-level="${k}"`)).join('')}</div>
+        <div class="hint">High: everyone GeneralsOnline ${HIGH_ELO}+, or a GameReplays tournament / expert / gold / ROTW game.</div>
       </div>
       <div class="grp">
         <div class="grp-h"><span class="lbl">Faction played</span><button class="act" data-clear="facs">any</button></div>
@@ -874,8 +874,93 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     });
     label();
   }
+  // --- the tour: a few words over each part of the page -----------------------
+  // Steps spotlight one element at a time (a box over it, the rest dimmed) with a line of text and Next.
+  // The common steps below, then any of the page's own (window.ZH_TOUR: [{sel | h2, text}], h2 = the start
+  // of a card title; none today - the tour is about the filters, not the cards). Starts from the header's
+  // Tour button, from ?tour on the URL, and once by itself on a browser's first visit (localStorage zh-tour)
+  const TOUR_COMMON = [
+    { sel: '#rail .grp:nth-of-type(2)', text: 'Filter by matchup here.' },
+    { sel: '#rail #dual', up: '.grp', text: 'Game length here; maps and starting cash below.' },
+    { sel: '#active', text: 'What is filtering right now. The x drops one.' },
+    { sel: '#stamp .subset', text: () => window.ZH_SUBSET && window.ZH_SUBSET.active   // a link can open the site on a random share of the games
+        ? 'You are not seeing all the data: this is a random share of the games. Pick all here.'
+        : 'Fewer games load faster. Pick a share, or all.' },
+  ];
+  const TOUR_END = [];
+  function tourTarget(step) {
+    let el = null;
+    if (step.h2) el = [...document.querySelectorAll('main .card')].find(c => { const h = c.querySelector('h2'); return h && h.textContent.trim().toLowerCase().startsWith(step.h2.toLowerCase()); });
+    else el = document.querySelector(step.sel);
+    if (el && step.up) el = el.closest(step.up) || el;
+    if (!el || el.offsetParent === null) return null;   // hidden or absent: skipped
+    // a card taller than the screen: its title bar carries the spot, the card shows under it
+    if (el.classList.contains('card') && el.offsetHeight > window.innerHeight * .7) el = el.querySelector('.card-h') || el;
+    return el;
+  }
+  let tourOn = false;
+  function startTour() {
+    if (tourOn) return;
+    try { localStorage.setItem('zh-tour', '1'); } catch (e) { /* fine */ }
+    const steps = TOUR_COMMON.concat(window.ZH_TOUR || [], TOUR_END).filter(tourTarget);
+    if (!steps.length) return;
+    tourOn = true;
+    const root = document.createElement('div'); root.id = 'tour';
+    root.innerHTML = '<div class="dim"></div><div class="spot"></div><div class="box"><div class="t"></div><div class="nav"><span class="n"></span><button type="button" class="back" title="back">&lsaquo;</button><button type="button" class="next">Next</button><button type="button" class="x" title="end the tour">&times;</button></div></div>';
+    document.body.appendChild(root);
+    const dim = root.querySelector('.dim'), spot = root.querySelector('.spot'), box = root.querySelector('.box');
+    let i = 0;
+    const end = () => { tourOn = false; root.remove(); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); document.removeEventListener('keydown', keys); };
+    const place = () => {
+      const el = tourTarget(steps[i]); if (!el) { root.classList.add('lost'); return; }
+      root.classList.remove('lost');
+      const r = el.getBoundingClientRect(), pad = 6;
+      const x1 = r.left - pad, y1 = r.top - pad, x2 = r.right + pad, y2 = r.bottom + pad;
+      spot.style.left = x1 + 'px'; spot.style.top = y1 + 'px'; spot.style.width = (x2 - x1) + 'px'; spot.style.height = (y2 - y1) + 'px';
+      // the dim layer with the target cut out (an even-odd polygon: the screen, then the hole)
+      dim.style.clipPath = `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${x1}px ${y1}px, ${x1}px ${y2}px, ${x2}px ${y2}px, ${x2}px ${y1}px, ${x1}px ${y1}px)`;
+      // the box beside the target: to its right when there is room, else under it, else above; kept on screen
+      const bw = box.offsetWidth, bh = box.offsetHeight, W = window.innerWidth, H = window.innerHeight, gap = 12;
+      let x, y;
+      if (r.right + gap + bw < W - 8) { x = r.right + gap; y = r.top; }
+      else if (r.bottom + gap + bh < H - 8) { x = r.left; y = r.bottom + gap; }
+      else if (r.top - gap - bh > 8) { x = r.left; y = r.top - gap - bh; }
+      else { x = r.left - gap - bw; y = r.top; }
+      box.style.left = Math.max(8, Math.min(W - bw - 8, x)) + 'px'; box.style.top = Math.max(8, Math.min(H - bh - 8, y)) + 'px';
+    };
+    const show = () => {
+      const step = steps[i], el = tourTarget(step);
+      if (el) el.scrollIntoView({ block: 'center', inline: 'nearest' });
+      root.querySelector('.t').textContent = typeof step.text === 'function' ? step.text() : step.text;
+      root.querySelector('.n').textContent = (i + 1) + ' / ' + steps.length;
+      root.querySelector('.back').disabled = i === 0;
+      root.querySelector('.next').textContent = i === steps.length - 1 ? 'Done' : 'Next';
+      // after the scroll settles (a frame is enough: instant scrolling)
+      requestAnimationFrame(place);
+    };
+    const go = d => { i += d; if (i < 0) i = 0; if (i >= steps.length) { end(); return; } show(); };
+    const keys = e => { if (e.key === 'Escape') end(); else if (e.key === 'ArrowRight' || e.key === 'Enter') go(1); else if (e.key === 'ArrowLeft') go(-1); else return; e.preventDefault(); };
+    root.querySelector('.next').addEventListener('click', () => go(1));
+    root.querySelector('.back').addEventListener('click', () => go(-1));
+    root.querySelector('.x').addEventListener('click', end);
+    root.addEventListener('click', e => { if (!e.target.closest('.box')) go(1); });   // the dimmed page: a click moves on
+    window.addEventListener('resize', place); window.addEventListener('scroll', place, true); document.addEventListener('keydown', keys);
+    show();
+  }
+  function bindTour() {
+    const pr = document.querySelector('header .print'); if (!pr) return;
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'tour'; b.textContent = 'Tour'; b.title = 'a short tour of the page';
+    pr.after(b);
+    b.addEventListener('click', startTour);
+    let auto = false;
+    try { auto = new URLSearchParams(location.search).has('tour') || !localStorage.getItem('zh-tour'); } catch (e) { auto = new URLSearchParams(location.search).has('tour'); }
+    if (!auto) return;
+    // once the page is up: the veil gone and its first cards drawn
+    const tick = setInterval(() => { if (document.getElementById('loading')) return; clearInterval(tick); setTimeout(startTour, 700); }, 250);
+  }
   function bindExport() {
     bindTheme();
+    bindTour();
     const pr = document.querySelector('header .print');
     if (pr) pr.addEventListener('click', () => exportPdf(pr));
     window.addEventListener('beforeprint', () => document.body.classList.add('printing'));
@@ -967,14 +1052,21 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
       else if (onMain && onMain(d)) onChange();
     });
     $('stamp').textContent = (D.stamp.match(/Generated (\S+)/) || [])[1] ? 'sample of ' + fmtInt(D.games.length) + ' games \u00b7 ' + D.stamp.match(/Generated (\S+)/)[1].slice(0, 10) : '';
-    // a random subset of the games (?games= or ?pct= on the URL, data.js): named in the header, with the way back to the whole set
-    if (D.subset) {
-      const sub = D.subset, pct = sub.pct >= 10 ? Math.round(sub.pct) : sub.pct >= 1 ? sub.pct.toFixed(1) : sub.pct.toFixed(2);
-      const el = document.createElement('span'); el.className = 'subset';
-      el.innerHTML = `random subset: <b>${fmtInt(sub.n)}</b> of ${fmtInt(sub.total)} games (${pct}%) \u00b7 seed ${sub.seed} <button type="button" class="all" title="reload the page with every game">all games</button>`;
+    // the games on the page: all of them, or a random share (?games= or ?pct= on the URL, data.js). Always in the
+    // header, with a picker: a smaller share loads faster and a shared link can name one
+    {
+      const SUB = window.ZH_SUBSET, sub = D.subset, el = document.createElement('span'); el.className = 'subset';
+      const shares = [50, 25, 10, 5, 1];
+      const cur = sub ? sub.pct : 0, custom = sub && !shares.some(p => Math.abs(p - cur) < .05);
+      const pctOf = p => p >= 10 ? String(Math.round(p)) : p >= 1 ? p.toFixed(1) : p.toFixed(2);
+      el.innerHTML = (sub ? `random <b>${fmtInt(sub.n)}</b> of ${fmtInt(sub.total)} games \u00b7 seed ${sub.seed}` : `showing <b>all</b> ${fmtInt(SUB ? SUB.total : D.games.length)} games`)
+        + ` <select class="share" title="how many of the games to load: a random share loads faster">`
+        + `<option value="all"${sub ? '' : ' selected'}>all games</option>`
+        + (custom ? `<option value="${cur}" selected>${pctOf(cur)}%</option>` : '')
+        + shares.map(p => `<option value="${p}"${sub && Math.abs(p - cur) < .05 ? ' selected' : ''}>${p}%</option>`).join('') + `</select>`;
       $('stamp').prepend(el);
-      el.querySelector('.all').addEventListener('click', () => window.ZH_SUBSET.clear());
-      document.querySelectorAll('header nav a, header h1 a').forEach(a => a.setAttribute('href', window.ZH_SUBSET.link(a.getAttribute('href'))));   // the other pages open on the same draw
+      el.querySelector('.share').addEventListener('change', e => { const v = e.target.value; if (v === 'all') { if (sub) SUB.clear(); } else if (!sub || Math.abs(+v - cur) >= .05) SUB.set(+v); });
+      if (sub) document.querySelectorAll('header nav a, header h1 a').forEach(a => a.setAttribute('href', SUB.link(a.getAttribute('href'))));   // the other pages open on the same draw
     }
     renderRail();
     onChange();
@@ -1031,6 +1123,18 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   }
   function workingAt(f) { const el = $('working'); if (el && !el.hidden) el.querySelector('.prog i').style.width = (Math.max(0, Math.min(1, f)) * 100).toFixed(1) + '%'; }
 
+  // the one progress element of the app: a spinner, what is happening, and how far when that is known.
+  // progressHTML makes it, progressSet updates every one under root (the tickers call it)
+  const progressHTML = (label, frac) => `<span class="progress"><i class="spin"></i><span class="msg">${esc(label)}</span>${frac == null ? '' : `<b class="pct">${Math.round(frac * 100)}%</b>`}</span>`;
+  function progressSet(root, label, frac) {
+    for (const p of root.querySelectorAll('.progress')) {
+      p.querySelector('.msg').textContent = label;
+      let b = p.querySelector('.pct');
+      if (frac == null) { if (b) b.remove(); continue; }
+      if (!b) { b = document.createElement('b'); b.className = 'pct'; p.appendChild(b); }
+      b.textContent = Math.round(frac * 100) + '%';
+    }
+  }
   function veilDown() {
     const veil = $('loading');
     if (veil) setTimeout(() => veil.remove(), 0);   // not rAF: it stalls in a hidden tab
@@ -1063,7 +1167,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     $, esc, fmtPct, fmtPct1, fmtInt, fmtMoney, fmtMoneyK, fmtCash, fmtPts, wilson, quant, select, mean,
     chip, seg, facet, renderRail, renderActive, bind, tips, showTip, moveTip, hideTip, exportCard, exportPdf,
     mapFacetControls, mapFacetHit, mapFacetAct, mapFacts, facetCount, mapHit, onMapFacet: null,   // the map narrowing, for a page that draws it too (the map card's pick)
-    later, task, chunked, working, workingAt, memo, veilDown,
+    later, task, chunked, working, workingAt, memo, veilDown, progressHTML, progressSet,
   };
   window.ZH = api;
   if (window.performance && performance.mark) performance.mark('zh-indexed');   // seats and templates precomputed

@@ -18,8 +18,7 @@
   /* the spinner over the chart while its bins are recounted: the old chart dims under it */
   .tl-wrap { position: relative; min-height: 80px; }
   .tl-wrap .busy[hidden] { display: none; }
-  .tl-wrap .busy { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--ink-2); font-size: 13px; }
-  .tl-wrap .busy .spin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--line-strong); border-top-color: var(--accent); animation: spin .8s linear infinite; will-change: transform; }
+  .tl-wrap .busy { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
   .tl-wrap:has(.busy:not([hidden])) .tl { opacity: .3; pointer-events: none; }
   .tl .band line { stroke: var(--ink); stroke-width: 1; opacity: 0; }
   .tl .band:hover line { opacity: .35; }
@@ -85,7 +84,7 @@
         <div class="ctl"><span class="lbl">Style</span><div class="seg" id="tstyle"></div></div>
         <div class="ctl"><span class="lbl">Marks</span><div class="seg" id="tmarks"></div></div>
       </div>
-      <div class="tl-wrap"><div class="tl" id="tchart"></div><div class="busy" id="tbusy" hidden><div class="spin"></div><span id="tbusy-msg"></span></div></div>
+      <div class="tl-wrap"><div class="tl" id="tchart"></div><div class="busy" id="tbusy" hidden></div></div>
       <div class="foot"><span id="time-note"></span></div>
     </section>
   </main>
@@ -276,6 +275,7 @@ window.ZH_READY.then(function (Z) {
       timeW.onmessage = e => {
         const d = e.data;
         if (d.type === 'loaded') { TIME = { stamp: d.stamp, bucket: d.bucket, cap: d.cap, games: d.games }; timeW.postMessage(timeCtx()); res(); }
+        else if (d.type === 'progress') { if (d.job == null ? !TIME : d.job === countJob) timeBusy(d.phase === 'load' ? 'loading timelines\u2026' : d.phase === 'parse' ? 'parsing timelines\u2026' : 'counting the bins\u2026', d.at); }
         else if (d.type === 'error' && d.job == null) { timeErr = new Error(d.message); res(); }
         else { const r = timeReply.get(d.job); if (r) { timeReply.delete(d.job); r(d); } }
       };
@@ -325,7 +325,9 @@ window.ZH_READY.then(function (Z) {
   let markOf = null;   // template index -> bitmask of the MARKS it counts for, built once
   let TVIEW = null;    // the timeline's window of bins {v0, v1, nb, bs}; reset when the bins change
   let timeJob = 0;   // the latest renderTime call; earlier ones still waiting to draw are dropped
-  const timeBusy = msg => { const b = $('tbusy'); b.hidden = msg == null; $('tbusy-msg').textContent = msg || ''; };
+  // the chart's busy state: the app's progress element, its percentage from the worker's progress messages
+  let busyMsg = null;
+  const timeBusy = (msg, frac) => { const b = $('tbusy'); b.hidden = msg == null; if (msg == null) { busyMsg = null; return; } if (msg !== busyMsg || !b.firstChild) { b.innerHTML = Z.progressHTML(msg, frac); busyMsg = msg; } else Z.progressSet(b, msg, frac); };
   function renderTime() {
     renderTimeControls();
     const box = $('tchart'), note = $('time-note');

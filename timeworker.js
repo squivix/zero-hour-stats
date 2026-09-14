@@ -10,8 +10,13 @@ let C = null;      // the population: see unit-mix.html timeCtx()
 
 // a shard's JSON: gzip told by the bytes (a server may hand the .gz already inflated), base64 only on
 // the old base64-wrapped export
-const inflate = async (res, name) => {
-  let bytes = new Uint8Array(await res.arrayBuffer());
+const inflate = async (res, name, onBytes) => {
+  let bytes;
+  if (onBytes && res.body) {   // read in chunks, so the page can show how far the download is
+    const reader = res.body.getReader(), chunks = []; let n = 0;
+    for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); n += value.length; onBytes(n); }
+    bytes = new Uint8Array(n); let o = 0; for (const c of chunks) { bytes.set(c, o); o += c.length; }
+  } else bytes = new Uint8Array(await res.arrayBuffer());
   if (/\.b64$/.test(name)) { const bin = atob(new TextDecoder().decode(bytes).replace(/\s+/g, '')); bytes = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k); }
   if (bytes[0] === 0x1f && bytes[1] === 0x8b) return JSON.parse(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
   return JSON.parse(new TextDecoder().decode(bytes));
@@ -24,7 +29,11 @@ async function load(dataset, base, shards) {
   const r = await fetch(DIR + dataset + '-time-meta.json', { cache: 'no-cache' });
   if (!r.ok) throw new Error('no timeline data (' + r.status + ')');
   const meta = await r.json();
-  const parts = await Promise.all(meta.shards.filter((sh, i) => !shards || i === 0 || shards.includes(i)).map(async sh => { const t = await fetch(DIR + sh.f + '?v=' + encodeURIComponent(meta.stamp)); if (!t.ok) throw new Error(sh.f + ' ' + t.status); return inflate(t, sh.f); }));
+  // progress for the page: bytes in over the shards' bytes (capped: a server that inflates on the way hands more)
+  const mine = meta.shards.filter((sh, i) => !shards || i === 0 || shards.includes(i)), total = mine.reduce((a, sh) => a + (sh.bytes || 0), 0), got = new Map();
+  let last = 0;
+  const tell = () => { const now = Date.now(); if (now - last < 150 || !total) return; last = now; let sum = 0; for (const v of got.values()) sum += v; postMessage({ type: 'progress', phase: 'load', at: Math.min(1, sum / total) }); };
+  const parts = await Promise.all(mine.map(async sh => { const t = await fetch(DIR + sh.f + '?v=' + encodeURIComponent(meta.stamp)); if (!t.ok) throw new Error(sh.f + ' ' + t.status); return inflate(t, sh.f, n => { got.set(sh.f, n); tell(); }); }));
   const byMatch = new Map();
   for (const part of parts) for (const g of part.games) byMatch.set(g.m, g);
   TIME = { stamp: meta.stamp, bucket: parts[0].bucket || 60, cap: parts[0].seed_cap, byMatch };
@@ -101,7 +110,9 @@ function count(o) {
       if (best >= MARK_MAX) break;
     }
   };
+  let lastTell = Date.now();
   for (let g = 0; g < gm.length; g++) {
+    if ((g & 1023) === 0 && o.job != null) { const now = Date.now(); if (now - lastTell >= 150) { lastTell = now; postMessage({ type: 'progress', phase: 'count', job: o.job, at: g / gm.length }); } }
     const tg = TIME.byMatch.get(gm[g]), n = np[g], gmin = gt[g];
     for (let i = 0; i < n; i++) {
       const m = mask[si], f = sf[si]; si++;
