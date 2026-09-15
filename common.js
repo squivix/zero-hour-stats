@@ -1052,21 +1052,21 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
       else if (onMain && onMain(d)) onChange();
     });
     $('stamp').textContent = (D.stamp.match(/Generated (\S+)/) || [])[1] ? 'sample of ' + fmtInt(D.games.length) + ' games \u00b7 ' + D.stamp.match(/Generated (\S+)/)[1].slice(0, 10) : '';
-    // the games on the page: all of them, or a random share (?games= or ?pct= on the URL, data.js). Always in the
+    // the games on the page: all of them, or a random share (?max= or ?pct= on the URL, data.js). Always in the
     // header, with a picker: a smaller share loads faster and a shared link can name one
     {
       const SUB = window.ZH_SUBSET, sub = D.subset, el = document.createElement('span'); el.className = 'subset';
       const shares = [50, 25, 10, 5, 1];
       const cur = sub ? sub.pct : 0, custom = sub && !shares.some(p => Math.abs(p - cur) < .05);
       const pctOf = p => p >= 10 ? String(Math.round(p)) : p >= 1 ? p.toFixed(1) : p.toFixed(2);
-      el.innerHTML = (sub ? `random <b>${fmtInt(sub.n)}</b> of ${fmtInt(sub.total)} games \u00b7 seed ${sub.seed}` : `showing <b>all</b> ${fmtInt(SUB ? SUB.total : D.games.length)} games`)
+      el.innerHTML = (sub ? `random <b>${fmtInt(sub.n)}</b> of ${fmtInt(sub.total)} games \u00b7 seed ${sub.seed}` : `showing <b>all</b> ${fmtInt(SUB ? SUB.total : D.games.length)} games${SUB && SUB.asked ? ` <small>(under the ${fmtInt(SUB.asked)} limit; it goes on to the other pages)</small>` : ''}`)
         + ` <select class="share" title="how many of the games to load: a random share loads faster">`
         + `<option value="all"${sub ? '' : ' selected'}>all games</option>`
         + (custom ? `<option value="${cur}" selected>${pctOf(cur)}%</option>` : '')
         + shares.map(p => `<option value="${p}"${sub && Math.abs(p - cur) < .05 ? ' selected' : ''}>${p}%</option>`).join('') + `</select>`;
       $('stamp').prepend(el);
       el.querySelector('.share').addEventListener('change', e => { const v = e.target.value; if (v === 'all') { if (sub) SUB.clear(); } else if (!sub || Math.abs(+v - cur) >= .05) SUB.set(+v); });
-      if (sub) document.querySelectorAll('header nav a, header h1 a').forEach(a => a.setAttribute('href', SUB.link(a.getAttribute('href'))));   // the other pages open on the same draw
+      if (SUB && SUB.asked) document.querySelectorAll('header nav a, header h1 a').forEach(a => a.setAttribute('href', SUB.link(a.getAttribute('href'))));   // the other pages open on the same draw - also from a page too small to draw it (the user, 2026-09-15)
     }
     renderRail();
     onChange();

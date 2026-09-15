@@ -55,7 +55,8 @@ window.ZH_DATA = (async function () {
   const meta = await r.json();
   if (meta.v !== 2 && meta.v !== 3) throw new Error('unexpected data version ' + meta.v);
   for (const c of COLS.concat(LATER)) if (!(meta.cols || []).includes(c)) throw new Error('the ' + DS + ' export has no ' + c + ' column - re-export');
-  // a random subset of the games, from the URL: ?games=<count> or ?pct=<share of the games>, one or the other
+  // a random subset of the games, from the URL: ?max=<count> (at most that many; ?games= was its name before
+  // 2026-09-15) or ?pct=<share of the games>, one or the other
   // (both given, neither is taken), with ?seed=<int> naming the draw so every page of the visit - the nav links
   // carry the query, common.js - and a shared link open the same games. A value that is not a number, or one
   // that is out of range (zero, the whole set or more), comes off the URL and the whole set loads. An export
@@ -69,23 +70,28 @@ window.ZH_DATA = (async function () {
   const subset = (function () {
     const url = new URL(location.href), q = url.searchParams;
     const num = k => { if (!q.has(k)) return null; const v = q.get(k).trim(); return /^\d+(\.\d+)?$/.test(v) ? +v : NaN; };
-    const games = num('games'), pct = num('pct');
+    const games = num('max') ?? num('games'), pct = num('pct');
     let n = 0, mode = null;
     if (games != null && pct != null) n = 0;   // both: neither
-    else if (games != null) { n = Math.floor(games); mode = 'games'; }
+    else if (games != null) { n = Math.floor(games); mode = 'max'; }
     else if (pct != null) { n = Math.round(pct / 100 * nGames); mode = 'pct'; }
-    if (!(n >= 1 && n < nGames)) { n = 0; mode = null; }
+    // a draw that is not a number, or zero, is dropped; one this dataset cannot honour (as many games as it has,
+    // or more: ?max=20000 on the combat page's 3,600) loads the whole set here but STAYS on the URL and the nav
+    // links, so the draw goes on to the next page instead of being lost on the way through (the user, 2026-09-15)
+    const asked = n >= 1 ? n : 0;
+    if (!asked) mode = null;
+    if (!(asked && n < nGames)) n = 0;
     let seed = q.get('seed');
-    seed = n && seed != null && /^\d{1,10}$/.test(seed.trim()) && +seed < 4294967296 ? +seed : n ? Math.floor(Math.random() * 4294967296) : null;
-    for (const k of ['games', 'pct', 'seed']) q.delete(k);
-    if (n) { q.set(mode, mode === 'games' ? String(n) : String(pct)); q.set('seed', String(seed)); }
+    seed = asked && seed != null && /^\d{1,10}$/.test(seed.trim()) && +seed < 4294967296 ? +seed : asked ? Math.floor(Math.random() * 4294967296) : null;
+    for (const k of ['max', 'games', 'pct', 'seed']) q.delete(k);
+    if (asked) { q.set(mode, mode === 'max' ? String(asked) : String(pct)); q.set('seed', String(seed)); }
     if (url.href !== location.href) { try { history.replaceState(history.state, '', url.href); } catch (e) { /* file: or a sandbox */ } }
     // the query the nav links carry between pages: the draw, not a one-shot flag like ?tour
     const lq = new URLSearchParams(url.search); lq.delete('tour');
     const search = lq.toString() ? '?' + lq : '';
     window.ZH_SUBSET = {
-      n, total: nGames, seed, active: !!n,
-      link: to => { const [path, hash] = to.split('#'); return path + (n ? search : '') + (hash ? '#' + hash : ''); },
+      n, total: nGames, seed, active: !!n, asked,   // asked: the draw on the URL, honoured here or not
+      link: to => { const [path, hash] = to.split('#'); return path + (asked ? search : '') + (hash ? '#' + hash : ''); },
       clear: () => { location.href = location.pathname + location.hash; },
       // reload on a share of the games (the header's picker): the same seed when one is drawn, else a fresh one
       set: pct => { const p = new URLSearchParams(); p.set('pct', String(pct)); p.set('seed', String(seed != null ? seed : Math.floor(Math.random() * 4294967296))); location.href = location.pathname + '?' + p + location.hash; },
