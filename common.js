@@ -48,7 +48,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     'Command Center': 'cc', 'War Factory': 'wf', 'Barracks': 'rax', 'Arms Dealer': 'ad arms', 'Supply Stash': 'stash', 'Black Market': 'market',
     'Strategy Center': 'strat', 'Internet Center': 'ic', 'Propaganda Center': 'prop propaganda', 'Power Plant': 'power pp',
     'Supply Drop Zone': 'drop zone sdz', 'Laser Tank': 'laser', 'Laser Defense Turret': 'laser turret', 'Alpha Aurora': 'aurora alpha',
-    'Assault Helix': 'lix', 'Assault Troop Crawler': 'tc crawler atc', 'Attack Outpost': 'outpost', 'Toxin Rebel': 'reb tox rebel',
+    'Assault Helix': 'lix', 'Assault Troop Crawler': 'tc crawler atc', 'Attack Outpost': 'outpost', 'Toxin Rebel': 'reb tox rebel', 'Demo Rebel': 'reb demo rebel', 'Demo Bike': 'bike demo combat bike',
     'Advanced Demo Trap': 'trap', 'EMP Patriot': 'patriot emp pat system', 'Nuke Cannon': 'nuke',
   };
   // one lowercase haystack per unit: display name, the name a rename replaced, raw template, nicknames of each part
@@ -880,7 +880,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   // of a card title; none today - the tour is about the filters, not the cards). Starts from the header's
   // Tour button, from ?tour on the URL, and once by itself on a browser's first visit (localStorage zh-tour)
   const TOUR_COMMON = [
-    { sel: '#rail .grp:nth-of-type(2)', text: 'Filter by matchup here.' },
+    { sel: '#rail .grp:nth-of-type(2)', to: '#rail .grp:nth-of-type(3)', text: 'Filter by matchup here.' },   // both sides: the faction played, and against
     { sel: '#rail #dual', up: '.grp', text: 'Game length here; maps and starting cash below.' },
     { sel: '#active', text: 'What is filtering right now. The x drops one.' },
     { sel: '#stamp .subset', text: () => window.ZH_SUBSET && window.ZH_SUBSET.active   // a link can open the site on a random share of the games
@@ -914,8 +914,8 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     const place = () => {
       const el = tourTarget(steps[i]); if (!el) { root.classList.add('lost'); return; }
       root.classList.remove('lost');
-      const r = el.getBoundingClientRect(), pad = 6;
-      const x1 = r.left - pad, y1 = r.top - pad, x2 = r.right + pad, y2 = r.bottom + pad;
+      const r = el.getBoundingClientRect(), pad = 6, to = steps[i].to && document.querySelector(steps[i].to), r2 = to && to.offsetParent !== null ? to.getBoundingClientRect() : r;   // `to`: the spot runs on to a second element
+      const x1 = Math.min(r.left, r2.left) - pad, y1 = Math.min(r.top, r2.top) - pad, x2 = Math.max(r.right, r2.right) + pad, y2 = Math.max(r.bottom, r2.bottom) + pad;
       spot.style.left = x1 + 'px'; spot.style.top = y1 + 'px'; spot.style.width = (x2 - x1) + 'px'; spot.style.height = (y2 - y1) + 'px';
       // the dim layer with the target cut out (an even-odd polygon: the screen, then the hole)
       dim.style.clipPath = `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${x1}px ${y1}px, ${x1}px ${y2}px, ${x2}px ${y2}px, ${x2}px ${y1}px, ${x1}px ${y1}px)`;

@@ -166,6 +166,17 @@ window.ZH_READY.then(function (Z) {
   // hull's riders fight as units of their own, so a hull and its exact cargo can be read back together as one unit
   const CB = 11, CS = 3;
   const LOADS = D.loads || [null];
+  // a rider's fight from inside a hull is the hull's: one row per hull, named by what it mostly carried -
+  // "Battle Bus (RPGs)", "Humvee (MDs)" - carrying the hull's own fire, the riders' fire from inside, the hull's
+  // death and the riders it took down with it (each a run of its own, so nothing is counted twice; a rider lost
+  // inside counts as a death, as it counts as a kill for whoever got the hull: "players can evac and save the
+  // MDs" - the user, 2026-09-15). The hull with nobody aboard stays its own row ("Humvee (empty)"); the versus
+  // card's cargo picker still narrows a hull to an exact load
+  const FOLD = Int32Array.from(CT, t => t.raw.includes('@') && t.bi >= 0 ? t.bi : -1);
+  const ARMED = new Uint8Array(CT.length); FOLD.forEach(h => { if (h >= 0) ARMED[h] = 1; });   // hulls that fight through their riders
+  const TAG_NAME = new Map(); for (const l of LOADS) if (l && !l.k.includes(',')) TAG_NAME.set(l.k.split(':')[0], l.n.replace(/^\d+ /, ''));
+  const HEROES = new Set(['jarmen', 'burton', 'lotus', 'hacker', 'saboteur']);
+  const riderWord = tag => { const n = TAG_NAME.get(tag) || tag; return HEROES.has(tag) || /s$/i.test(n) ? n : n + 's'; };
 
   const METRICS = [
     ['ratio', 'Value ratio', v => v == null ? '\u2014' : v.toFixed(2) + '\u00d7', 'ratio'],
@@ -195,20 +206,22 @@ window.ZH_READY.then(function (Z) {
     if (unitsView) for (const c of F.classes) clsOn[CLS_IDX[c]] = 1; else clsOn[STRUCT] = 1;
     // under Combat units only a template that cannot remove hit points is out of everything: rows,
     // totals, the per-game medians, the class mix. The class filter shapes the rows alone.
-    const nc = ti => F.noncombat && CT[ti].nc;
-    const tOn = ti => clsOn[CT[ti].ci] && !nc(ti);
+    const nc = ti => F.noncombat && CT[ti].nc && !ARMED[ti];   // a hull that fights through its riders is a combat unit
+    const tOn = ti => { const h = FOLD[ti] >= 0 ? FOLD[ti] : ti; return clsOn[CT[h].ci] && !nc(h); };   // a folded rider goes by its hull's class
     // a unit a seat's own menus cannot queue came from a captured structure: its own row, and only
     // with a single faction picked (else those fights are left out), as on the unit-mix page
     const showCap = Z.showCaptured();
     const NT = CT.length, keyIx = new Int32Array(NT * 2).fill(-1);   // template (+NT when captured) -> row index under the current naming
     const rows = [], byKey = new Map();
     const rowOf = (ti, cap) => {
+      if (FOLD[ti] >= 0) ti = FOLD[ti];   // a rider's row is its hull's
       const ix = cap ? ti + NT : ti;
       let i = keyIx[ix];
       if (i >= 0) return i;
       const t = CT[ti], k = Z.keyOf(t) + (cap ? '\u0000captured' : '');
       i = byKey.get(k);
-      if (i == null) { i = rows.length; byKey.set(k, i); rows.push({ key: k, n: (F.merge === 'all' ? t.n : t.m) + (cap ? ' (captured)' : ''), o: t.o, raw: t.raw, bi: t.bi, cls: t.cls, ci: t.ci, cost: t.cost, sticker: t.sticker, captured: !!cap, dest: 0, destN: 0, lost: 0, lostN: 0, kills: 0, deaths: 0, min: 0, present: 0, seen: new Set(), sides: 0 }); }
+      if (i == null) { i = rows.length; byKey.set(k, i); rows.push({ key: k, n: (F.merge === 'all' ? t.n : t.m) + (cap ? ' (captured)' : ''), o: t.o, raw: t.raw, raws: [], bi: t.bi, cls: t.cls, ci: t.ci, cost: t.cost, sticker: t.sticker, captured: !!cap, armed: !!ARMED[ti], dest: 0, destN: 0, lost: 0, lostN: 0, kills: 0, deaths: 0, min: 0, present: 0, seen: new Set(), sides: 0 }); }
+      if (!rows[i].raws.includes(t.raw)) rows[i].raws.push(t.raw);   // every template the naming merged into the row, for its tooltip (the user, 2026-09-15: one of three Rebels shown read as the row being that one)
       keyIx[ix] = i;
       return i;
     };
@@ -295,6 +308,13 @@ window.ZH_READY.then(function (Z) {
       r.net = d - l;
       r.permin = r.min > 0 ? d / r.min : 0;
       r.thin = r.present < MIN_GAMES || d + l < MIN_TRADED;
+      // a hull that fought through its riders: named by the riders it mostly carried, weighted by the value traded
+      if (r.armed && r.loads) {
+        const w = new Map();
+        for (const [li, gv] of r.loads) for (const part of LOADS[li].k.split(',')) { const [tag, n] = part.split(':'); w.set(tag, (w.get(tag) || 0) + gv * +n); }
+        const top = [...w].sort((a, b) => b[1] - a[1])[0];
+        if (top) { r.hn = r.n; r.n = `${r.hn} (${riderWord(top[0])})`; }
+      }
       r.metric = { ratio: r.ratio, kd: r.kd, dest: d, lost: l, net: r.net, kills: r.kills, deaths: r.deaths, permin: r.permin };
     }
     const stat = (a, n) => ({ n, median: Z.select(a, n, .5), mean: Z.mean(a.subarray(0, n)) });
@@ -369,7 +389,7 @@ window.ZH_READY.then(function (Z) {
       $('chart').innerHTML = `<div class="bars">${rows.map((r, i) => {
         const v = val(r), b = baseByKey.get(r.key);
         return `<div class="lift ${r.thin ? 'thin' : ''} ${S.pick === r.key ? 'on' : ''}" data-i="${i}" data-key="${esc(r.key)}">
-          <div class="name"><i style="--c:${CLS_COLOR[r.cls]}"></i><span title="${esc(r.raw)}">${esc(r.n)}</span></div>
+          <div class="name"><i style="--c:${CLS_COLOR[r.cls]}"></i><span title="${esc(r.raws.join(' \u00b7 '))}">${esc(r.n)}</span></div>
           <div class="lt">${ratioBar(v == null ? null : v === Infinity ? 8 : v)}${b ? ratioTick(b.metric[S.metric]) : ''}</div>
           <div class="v">${v === Infinity ? '\u221e' : fmt(v)}<small>${S.metric === 'kd' ? fmtInt(r.kills) + '/' + fmtInt(r.deaths) : fmtMoney(r.d) + ' / ' + fmtMoney(r.l)}</small></div>
         </div>`; }).join('')}</div>`;
@@ -381,7 +401,7 @@ window.ZH_READY.then(function (Z) {
         const w = max ? abs(r) / max * 100 : 0, bw = bv != null && max ? Math.abs(bv) / max * 100 : null;
         const c = kind === 'signed' ? (v >= 0 ? 'var(--win)' : 'var(--lose)') : CLS_COLOR[r.cls];
         return `<div class="row ${r.thin ? 'thin' : ''} ${S.pick === r.key ? 'on' : ''}" data-i="${i}" data-key="${esc(r.key)}">
-          <div class="name"><i style="--c:${CLS_COLOR[r.cls]}"></i><span title="${esc(r.raw)}">${esc(r.n)}</span></div>
+          <div class="name"><i style="--c:${CLS_COLOR[r.cls]}"></i><span title="${esc(r.raws.join(' \u00b7 '))}">${esc(r.n)}</span></div>
           <div class="track"><div class="bar" style="--c:${c};width:${w.toFixed(2)}%"></div>${bw == null ? '' : `<div class="base" style="left:${bw.toFixed(2)}%"></div>`}</div>
           <div class="val">${fmt(v)}${S.metric === 'kills' || S.metric === 'deaths' ? '' : `<small>${fmtInt(r.present)} g</small>`}</div>
         </div>`; }).join('')}</div>`;
@@ -399,7 +419,7 @@ window.ZH_READY.then(function (Z) {
   function tipHtml(r, b) {
     const c = v => v == null ? dash : v === Infinity ? '\u221e' : v.toFixed(2);
     const row = (l, v, bv) => `<tr><th class="l">${l}</th><td>${v}</td><td class="d">${bv}</td></tr>`;
-    return `<b>${esc(r.n)}</b> <span class="d">\u00b7 ${r.cls}${r.cost ? ' \u00b7 ' + fmtMoney(r.cost) + (r.sticker !== r.cost ? ' of ' + fmtMoney(r.sticker) + ' (its free units carry the rest)' : '') : ''}</span><div class="raw">${esc(r.raw)}</div>
+    return `<b>${esc(r.n)}</b> <span class="d">\u00b7 ${r.cls}${r.cost ? ' \u00b7 ' + fmtMoney(r.cost) + (r.sticker !== r.cost ? ' of ' + fmtMoney(r.sticker) + ' (its free units carry the rest)' : '') : ''}</span><div class="raw">${esc(r.raws.join(' \u00b7 '))}</div>
       <table><tr><th></th><th>Selection</th><th>Sample</th></tr>
       ${row('games', fmtInt(r.present), b ? fmtInt(b.present) : dash)}
       ${row('unit-minutes', fmtInt(Math.round(r.min)), b ? fmtInt(Math.round(b.min)) : dash)}
@@ -438,7 +458,7 @@ window.ZH_READY.then(function (Z) {
     const half = (title, sortKey, lines, total, side) => `<div><div class="lbl">${title}</div><div class="bars" id="${side}-bars">${lines.length ? lines.map((x, i) => {
       const rt = ratio(x.v);
       return `<div class="lift ${x.thin ? 'thin' : ''}" data-o="${esc(x.r.key)}" data-t="${sortKey}" data-i="${i}">
-        <div class="name"><i style="--c:${CLS_COLOR[x.r.cls]}"></i><span title="${esc(x.r.raw)}">${esc(x.r.n)}</span></div>
+        <div class="name"><i style="--c:${CLS_COLOR[x.r.cls]}"></i><span title="${esc(x.r.raws.join(' \u00b7 '))}">${esc(x.r.n)}</span></div>
         <div class="lt">${ratioBar(rt == null ? null : rt === Infinity ? 8 : rt)}</div>
         <div class="v">${rt == null ? dash : rt === Infinity ? '\u221e' : rt.toFixed(2) + '\u00d7'}<small>${fmtMoney(x.v[sortKey === 'took' ? 0 : 1])}</small></div>
       </div>`; }).join('') : '<div class="empty">nothing in the selection</div>'}</div>${(total > lines.length || lines.length > 12) ? `<div class="more-row">${total > lines.length ? `<button class="chip" data-more="${side}">Show more</button>` : ''}${lines.length > 12 ? `<button class="chip" data-less="${side}">Top 12</button>` : ''}</div>` : ''}</div>`;
@@ -534,7 +554,7 @@ window.ZH_READY.then(function (Z) {
       if (!c || !r.loads) return r;
       const ld = c === '*' ? null : LOADS.find(l => l && l.k === c);
       if (c !== '*' && !ld) return r;
-      return { ...r, n: r.n + ' + ' + (ld ? ld.n : 'riders'), cost: r.cost + (ld ? ld.cost : 0), raw: r.raw + (ld ? ' + ' + ld.k : ' + riders') };
+      return { ...r, n: (r.hn || r.n) + ' + ' + (ld ? ld.n : 'riders'), cost: r.cost + (ld ? ld.cost : 0), raw: r.raw + (ld ? ' + ' + ld.k : ' + riders') };
     };
     const a = packed(sel.rows[sel.byKey.get(ka)], S.vsl[0]), b = packed(sel.rows[sel.byKey.get(kb)], S.vsl[1]);
     const o = versus(sel, sel.byKey.get(ka), sel.byKey.get(kb));

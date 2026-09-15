@@ -5,4 +5,3 @@ opening posture, over a corpus of ranked and tournament games. Static pages; the
 from a bucket (config.js) and is cached in the browser after the first visit.
 
 Live: https://squivix.github.io/zero-hour-stats/
-
