@@ -91,6 +91,7 @@
   #mapspotr-v, #mapblur-v { min-width: 44px; display: inline-block; }
   .mapwrap .empty { width: 100%; }
   .mapwrap .empty { padding: 8px 0 4px; text-align: left; }
+  .mapwrap .empty .picktitle { font-size: 17px; font-weight: 600; color: var(--ink); }   /* the map title's face and size (the user, 2026-09-15: "Pick a map", one of the header fonts) */
   /* the pick's bar: the search and the rail's narrowing in the card's own idiom - a label and a segmented group per facet */
   .mapwrap .empty .pickbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin-top: 12px; }
   .mapwrap .empty .search { width: 190px; margin: 0; text-align: left; }
@@ -283,7 +284,7 @@
       <div class="parts mapt" id="mapt"></div>
       <div class="maptwrap" id="maptwrap" hidden></div>
       <!-- the map's controls in rows (the user, 2026-09-14: the header overflowed): what is drawn between the structure chips and the map, the ground's look under it -->
-      <div class="maprow draw"><span class="maptitle disp" id="maptitle"></span><div class="ctls"><div class="ctl"><span class="lbl">Draw</span><div class="seg" id="mapdraw"></div></div>
+      <div class="maprow draw" id="mapdrawrow"><span class="maptitle disp" id="maptitle"></span><div class="ctls"><div class="ctl"><span class="lbl">Draw</span><div class="seg" id="mapdraw"></div></div>
         <div class="ctl" id="mapblur-ctl"><span class="lbl">Blur <b id="mapblur-v"></b></span><input id="mapblur" type="range" min="3" max="30" step="1" aria-label="the spread of one placement, world units"></div>
         <div class="ctl" id="mapspotr-ctl"><span class="lbl">Grouping <b id="mapspotr-v"></b></span><input id="mapspotr" type="range" min="2" max="15" step="1" aria-label="the reach of a spot, world units"></div>
         <div class="ctl" id="mapflow-ctl"><span class="lbl">Raids</span><div class="seg" id="mapflow"></div></div>
@@ -1774,6 +1775,9 @@ window.ZH_READY.then(function (Z) {
     $('mapgrain-ctl').hidden = !M || !MAP_KIND_ON('sorties') || MAP_FLOW() !== 'flow'; $('mapgrain').value = MAP_GRAIN(); $('mapgrain-v').textContent = MAP && MAP.scale ? Math.round(MAP_GRAIN() / MAP.scale * 10) + ' wu' : MAP_GRAIN() + ' px'; $('mapblur').value = MAP_SIGMA() * 10; $('mapblur-v').textContent = MAP_SIGMA() * 10 + ' wu';
     seg($('mapsp'), spOpts, S.mapSp, 'data-mapsp');
     $('mapsp').parentElement.hidden = !M || spawns.size < 2;
+    // the Draw row holds its two lines only while a map is drawn (its controls come and go without the map jumping);
+    // with no map picked it is an empty band over the tiles, so it goes (the user, 2026-09-15)
+    $('mapdrawrow').hidden = !M;
     if (!M) {
       MAP = null; MAP_LAST.key = MAP_CELLS.key = null;
       $('mapkinds').innerHTML = ''; $('mapt').innerHTML = ''; $('maplegend').innerHTML = '';
@@ -1783,7 +1787,7 @@ window.ZH_READY.then(function (Z) {
       // for every map"), drawn from the raster the card would draw anyway, when the tile scrolls into view
       const pick = maps.filter(([id]) => id >= 0).map(([id, n]) => { const m = Z.MAPS.find(x => x.id === id); return `<button class="mapthumb" data-mapto="${id}" data-crc="${esc(m ? m.crc : '')}" data-name="${esc(m ? m.name : '?')}" title="${esc(m ? Z.mapFacts(m) || m.name : '?')}"><div class="th"><canvas width="1" height="1"></canvas></div><span>${esc(m ? m.name : '?')}</span><small>${fmtPct(n / N)}</small></button>`; }).join('');
       const old = wrap.querySelector('.empty'); if (old) old.remove();
-      wrap.insertAdjacentHTML('beforeend', `<div class="empty">${N ? `The selection spans ${fmtInt(maps.length)} maps - the map card draws one at a time. Pick one in the Map filter, or here:<div class="pickbar"><input id="mapthq" class="search" type="search" placeholder="find a map\u2026" value="${esc(THUMB_Q)}" autocomplete="off" aria-label="find a map"><div class="map-tools" id="mapthf">${Z.mapFacetControls()}</div></div><div class="maps">${pick}</div>` : 'no player-games in the selection'}</div>`);
+      wrap.insertAdjacentHTML('beforeend', `<div class="empty">${N ? `<span class="picktitle disp">Pick a map</span><div class="pickbar"><input id="mapthq" class="search" type="search" placeholder="find a map\u2026" value="${esc(THUMB_Q)}" autocomplete="off" aria-label="find a map"><div class="map-tools" id="mapthf">${Z.mapFacetControls()}</div></div><div class="maps">${pick}</div>` : 'no player-games in the selection'}</div>`);
       wrap.querySelectorAll('.mapthumb').forEach(b => THUMBS.observe(b));
       thumbFilter(wrap);
       $('map-note').textContent = ''; $('maptitle').textContent = '';
