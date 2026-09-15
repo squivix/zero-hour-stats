@@ -513,13 +513,6 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
         <div class="grp-h"><span class="lbl">Result</span><button class="act" data-clear="result">any</button></div>
         <div class="chips">${chip('Won', F.result.includes('won'), 'data-result="won"')}${chip('Lost', F.result.includes('lost'), 'data-result="lost"')}${chip('No record', F.result.includes('none'), 'data-result="none"')}</div>
       </div>`)}
-      ${grp('classes', `<div class="grp">
-        <div class="grp-h"><span class="lbl">Unit classes</span><button class="act" data-combat="1">combat only</button></div>
-        <div class="chips">${CLASSES.map(([k, l, c]) => chip(l, F.classes.includes(k), `data-cls="${k}"`, c)).join('')}</div>
-        ${PAGE === 'combat' ? `<div class="chips" style="margin-top:5px">${chip('Combat units only', F.noncombat, 'data-nc="1"')}</div>
-        <div class="hint">Economy = workers, dozers, supply trucks, Chinooks. Combat units only drops everything with no weapon that removes hit points (ambulance, hacker, radar van, ECM, every economy unit) from the rows and the totals; they still show as what a picked unit hit.</div>`
-        : `<div class="hint">Economy = workers, dozers, supply trucks, Chinooks.</div>`}
-      </div>`)}
       ${MAPS.length ? `<div class="grp">
         <div class="grp-h"><span class="lbl">Map</span><button class="act" data-clear="maps">any</button></div>
         <input id="mapq" class="search" type="search" placeholder="find a map\u2026" value="${esc(mapQuery)}" autocomplete="off">
@@ -547,7 +540,18 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
         <div class="chips">${MERGE.map(([k, l]) => chip(l, F.merge === k, `data-merge="${k}"`)).join('')}</div>
         <div class="hint">Identical: a general's variant joins its base only when it plays the same (Battle Master (Nuke) stands alone). All: every variant joins. Per template: one row each.</div>
       </div>`;
-    syncLength(); syncMapAll();
+    syncLength(); syncMapAll(); renderClasses();
+  }
+  // the unit-class filter is the unit pages' own (unit mix, combat): it lives on the page, in its #classes slot,
+  // not in the rail (the user, 2026-09-15); its state still rides F, so it persists and resets with the rest
+  function renderClasses() {
+    const el = $('classes'); if (!el) return;
+    // combat page: one switch, "Combat units only", which also takes Economy out (no economy unit fights, so a
+    // pressed Economy chip under it would lie); the other pages get the plain "combat only" shortcut instead
+    const nc = PAGE === 'combat' && F.noncombat;
+    el.innerHTML = `<span class="lbl">Unit classes</span><div class="chips">${CLASSES.map(([k, l, c]) => chip(l, F.classes.includes(k), `data-cls="${k}"${nc && k === 'economy' ? ' disabled title="no economy unit fights"' : ''}`, c)).join('')}`
+      + (PAGE === 'combat' ? `<span class="sep"></span>${chip('Combat units only', F.noncombat, 'data-nc="1"')}` : `<button class="act" data-combat="1">combat only</button>`) + `</div>`
+      + `<span class="hint">${PAGE === 'combat' ? 'Economy = workers, dozers, supply trucks, Chinooks. Combat units only drops everything with no weapon that removes hit points (ambulance, hacker, radar van, ECM, every economy unit) from the rows and the totals; they still show as what a picked unit hit.' : 'Economy = workers, dozers, supply trucks, Chinooks.'}</span>`;
   }
   function eventChips() {
     const q = evQuery.trim().toLowerCase();
@@ -735,7 +739,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     list('Cash', F.cash, v => v === 'other' ? 'other' : fmtCash(+v), 'cash');
     list('Format', F.fmt, v => v, 'fmt');
     if (F.tmin !== '' || F.tmax !== '') grp('Length', [{ t: F.tmin !== '' && F.tmax !== '' ? `${F.tmin}\u2013${F.tmax} min` : F.tmin !== '' ? `${F.tmin}+ min` : `under ${F.tmax} min`, key: 'length' }]);
-    const without = hidden.has('classes') ? [] : CLASSES.filter(([k]) => !F.classes.includes(k)).map(([k, l]) => ({ t: l, key: 'classes', val: k }));
+    const without = !$('classes') ? [] : CLASSES.filter(([k]) => !F.classes.includes(k)).map(([k, l]) => ({ t: l, key: 'classes', val: k }));
     without.forEach((p, i) => { p.pre = i ? ',' : ''; });
     grp('Without', without);
     if (F.noncombat) grp('Units', [{ t: 'combat only', key: 'noncombat' }]);
@@ -978,6 +982,13 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     only = (opts && opts.only) || null; onlyKey = (opts && opts.onlyKey) || null; maskKey = null; MASKS.clear(); FACET_MEMO.clear();   // the page's condition is part of the mask (opts.onlyKey names its state, so a change of it invalidates the cache)
     const changed = () => { persist(); renderRail(); onChange(); };
     api.update = fn => { fn(F); if (F.elo.length || F.oppElo.length) F.level = 'all'; changed(); };   // pages mutate filters through this
+    const classClick = d => {
+      if (d.cls) toggle(F.classes, d.cls);
+      else if (d.combat) F.classes = ['infantry', 'vehicle', 'aircraft'];
+      else if (d.nc) { F.noncombat = !F.noncombat; if (F.noncombat) F.classes = F.classes.filter(c => c !== 'economy'); }
+      else return false;
+      return true;
+    };
     $('rail').addEventListener('click', e => {
       const b = e.target.closest('button'); if (!b) return;
       const d = b.dataset;
@@ -990,7 +1001,6 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
       else if (d.facs) toggle(F.facs, +d.facs);
       else if (d.opp) toggle(F.opp, +d.opp);
       else if (d.level) { F.level = d.level; if (d.level !== 'all') { F.elo = []; F.oppElo = []; } }   // a preset over the rating filters: one or the other
-      else if (d.cls) toggle(F.classes, d.cls);
       else if (d.src) { toggle(F.sources, d.src); if (!eventsApply()) F.events = []; }
       else if (d.elo) { toggle(F.elo, d.elo); F.level = 'all'; }
       else if (d.oppelo) { toggle(F.oppElo, d.oppelo); F.level = 'all'; }
@@ -1004,8 +1014,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
       else if (d.merge) F.merge = d.merge;
       else if (d.clear) F[d.clear] = [];
       else if (d.clearLen) { F.tmin = ''; F.tmax = ''; }
-      else if (d.combat) { F.classes = ['infantry', 'vehicle', 'aircraft']; if (PAGE === 'combat') F.noncombat = true; }
-      else if (d.nc) F.noncombat = !F.noncombat;
+      else if (classClick(d)) { /* handled */ }
       else return;
       changed();
     });
@@ -1048,6 +1057,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
       const d = b.dataset;
       if (d.rm != null) { const [gi, pi] = d.rm.split(':').map(Number); removeFilter(activeFilters()[gi].parts[pi]); changed(); }
       else if (d.clearall) { clearAll(); changed(); }
+      else if (classClick(d)) changed();
       else if (d.resetcharts) { resetPage(); onChange(); }
       else if (onMain && onMain(d)) onChange();
     });

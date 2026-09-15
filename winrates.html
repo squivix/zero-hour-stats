@@ -82,6 +82,10 @@
   .curve .hit { fill: transparent; }
   .curve .hit:hover { fill: var(--ink); opacity: .05; }
   .curve .cur { stroke: var(--ink); stroke-width: 1; opacity: .5; pointer-events: none; }
+  /* the supply / derrick timing grids under Win Rate by Eco: the matchup grid's cells, a row per ordinal */
+  .timing .hm { margin: 0; }
+  .timing .hm td { width: 56px; }
+  .timing .hm thead th { white-space: nowrap; }
   .legend { display: inline-flex; gap: 14px; font-size: 12px; color: var(--ink-2); }
   .legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--accent); vertical-align: middle; margin-right: 5px; }
   .legend i.alive { border-top: 2px dashed var(--ink-2); }
@@ -307,6 +311,8 @@ window.ZH_READY.then(function (Z) {
     // the eco
     ['eco', 'clock', 'sup', 'Supplies', cntBins(4, 'none'), (p, g, by) => cnt(kindCount(p, K_SUP, by), 4)],
     ['eco', 'clock', 'sup2', 'Second supply placed', ['< 1:00', '1:00\u20131:30', '1:30\u20132:00', '2:00\u20133:00', 'later or none'], p => { const t = nthKind(p, K_SUP, 2); return t < 0 ? 4 : t < 60 ? 0 : t < 90 ? 1 : t < 120 ? 2 : t < 180 ? 3 : 4; }],
+    // the third comes an eco phase later (median 2:20, half never by 5:00), so its bins are wider (the user, 2026-09-15)
+    ['eco', 'clock', 'sup3', 'Third supply placed', ['< 1:00', '1:00\u20132:00', '2:00\u20133:00', '3:00\u20134:00', '4:00\u20135:00', 'later or none'], p => { const t = nthKind(p, K_SUP, 3); return t < 0 ? 5 : t < 60 ? 0 : t < 120 ? 1 : t < 180 ? 2 : t < 240 ? 3 : 4; }],
     ['eco', 'clock', 'gat', 'Gatherers', ['\u2264 2', '3\u20134', '5\u20136', '7\u20138', '9+'], (p, g, by) => { if (!p.gt) return -1; const v = p.gt[Math.min(p.gt.length - 1, Math.max(0, Math.round(by / 30) - 1))]; return v <= 2 ? 0 : v <= 4 ? 1 : v <= 6 ? 2 : v <= 8 ? 3 : 4; }],
     // builders = dozers, or GLA workers (KindOf DOZER), those out of the command center only (a stash's are gatherers):
     // the total, the starting one plus those built by the pane's clock (bd counted the built ones alone, by 2:00, so a
@@ -335,6 +341,17 @@ window.ZH_READY.then(function (Z) {
     umix: { el: 'umix', note: 'umix-note', by: 'uby', ord: 'uord', groups: { clock: 'By the clock', game: 'Whole game' } },
     play: { el: 'play', note: 'play-note', by: 'pby', ord: 'pord', all: 'pall', groups: { clock: '' } } };   // all: the Show control (top 12 / every one, scrolling)
   function kindCount(p, kind, by, alongBelow) { const pz = p.pz; if (!pz) return 0; let n = 0; for (let j = 0; j < pz.length; j += 4) if (pz[j + 3] === kind && pz[j + 1] <= by && (alongBelow == null || pz[j + 2] < alongBelow)) n++; return n; }
+  // when the Nth supply went down / the Nth derrick was ordered captured, against the win rate (the user, 2026-09-15:
+  // "one graph that relates all supply placement timings ... another for oil capture timings to winrate"): every seat
+  // lands in a 5 s bin per ordinal, the last bin = not by 5:00 (the pack's window); drawn as a grid, ordinal by
+  // when (a line chart read as a trend where the reader compares cells, and hid where the mass sits - the user)
+  const ORD = ['First', 'Second', 'Third', 'Fourth', 'Fifth'], T_RES = 5, T_END = 300, T_NB = T_END / T_RES + 1;
+  const TIMING = [
+    { key: 'sup', title: 'Supply timing', what: 'supply', verb: 'placed', n: 5, at: p => kindTimes(p, K_SUP) },
+    { key: 'oil', title: 'Derrick timing', what: 'derrick', verb: 'ordered captured', n: 4, at: p => p.od || [] }];
+  // the columns: finer over the first minute, where the first two supplies all land, coarser where the later ones spread
+  const T_COLS = [[0, 15], [15, 30], [30, 45], [45, 60], [60, 90], [90, 120], [120, 150], [150, 180], [180, 240], [240, 300]];
+  function kindTimes(p, kind) { const pz = p.pz; if (!pz) return []; const ts = []; for (let j = 0; j < pz.length; j += 4) if (pz[j + 3] === kind) ts.push(pz[j + 1]); return ts.sort((a, b) => a - b); }
   function nthKind(p, kind, n) { const pz = p.pz; if (!pz) return -1; const ts = []; for (let j = 0; j < pz.length; j += 4) if (pz[j + 3] === kind) ts.push(pz[j + 1]); ts.sort((a, b) => a - b); return ts.length >= n ? ts[n - 1] : -1; }
   function reach(p, by) { const pz = p.pz; if (!pz) return -1; let a = -1; for (let j = 0; j < pz.length; j += 4) if (pz[j + 3] !== K_CC && pz[j + 1] <= by && pz[j + 2] > a) a = pz[j + 2]; return a; }
   function firstPlay(p) { const so = p.so; if (!so) return -1; for (let j = 0; j < so.length; j = soNext(so, j)) if (OPLAY.has(so[j + 3])) return so[j]; return -1; }
@@ -394,6 +411,7 @@ window.ZH_READY.then(function (Z) {
     const readsA = READS.map(() => new Uint32Array(64)), clocks = READS.map(r => S[PANE[r[0]].by]), clockSet = [...new Set(clocks)];
     const tally = (i, k, w) => { let a = readsA[i]; if (k * 2 + 1 >= a.length) { const b = new Uint32Array(Math.max(a.length * 2, k * 2 + 2)); b.set(a); a = readsA[i] = b; } a[k * 2]++; a[k * 2 + 1] += w; };
     const leanA = new Uint32Array(4 * 4 * 2);   // own Leaning x opponent's Leaning -> [games, wins], at the Opening Play clock (S.oby)
+    const timA = TIMING.map(T => new Uint32Array(T.n * T_NB * 2));   // [ordinal * T_NB + 10 s bin] -> games, wins
     const M = Z.mask(), need = Z.M_SEAT | Z.M_POP | Z.M_FACET;   // a word of filter bits per seat, in this same order; the mask already needs a decided seat (bind opts.only)
     // game lengths in typed arrays (a numeric sort, not a comparator one); the class set and captured flag as bits
     const winLen = new Float64Array(M.length), lossLen = new Float64Array(M.length); let nw = 0, nl = 0;
@@ -419,6 +437,10 @@ window.ZH_READY.then(function (Z) {
         }
         { const c = lenIdx(g.t) * 2; lenA[c]++; lenA[c + 1] += w; }
         bump(byCash, Z.cashKey(g), w);
+        if (READS_ON) for (let c = 0; c < TIMING.length; c++) {
+          const T = TIMING[c], ts = T.at(p), a = timA[c];
+          for (let k = 0; k < T.n; k++) { const t = k < ts.length ? ts[k] : -1, o = (k * T_NB + (t < 0 || t >= T_END ? T_NB - 1 : (t / T_RES) | 0)) * 2; a[o]++; a[o + 1] += w; }
+        }
         if (READS_ON) for (const by of clockSet) {
           const v = readValues(p, g, by);
           for (let i = 0; i < READS.length; i++) { if (clocks[i] !== by) continue; if (v[i] === -2) { for (const k of v.m[i]) tally(i, k, w); } else if (v[i] >= 0) tally(i, v[i], w); }
@@ -436,7 +458,7 @@ window.ZH_READY.then(function (Z) {
     for (let i = -1; i < Z.ELO.length; i++) { const c = (i + 1) * 2; if (eloA[c]) byElo.set(Z.eloId(i), [eloA[c], eloA[c + 1]]); if (oppEloA[c]) byOppElo.set(Z.eloId(i), [oppEloA[c], oppEloA[c + 1]]); }
     GAP.forEach((b, i) => { if (gapA[i * 2]) byGap.set(b[0], [gapA[i * 2], gapA[i * 2 + 1]]); });
     LEN.forEach((b, i) => { if (lenA[i * 2]) byLen.set(b[0], [lenA[i * 2], lenA[i * 2 + 1]]); });
-    return { n, cell, byElo, byOppElo, byGap, byLen, byCash, reads, leanMx: leanA };
+    return { n, cell, byElo, byOppElo, byGap, byLen, byCash, reads, leanMx: leanA, timing: timA };
   }
 
   // --- tiles ------------------------------------------------------------------
@@ -572,7 +594,9 @@ window.ZH_READY.then(function (Z) {
     else { const groups = []; for (const x of rows) { const g = groups[groups.length - 1]; if (g && g.k === x.r[1]) g.rows.push(x); else groups.push({ k: x.r[1], rows: [x] }); }
       html = groups.map(g => `<div class="ogrp">${P.groups[g.k] ? `<div class="gh">${P.groups[g.k]}</div>` : ''}<div class="facets">${g.rows.map(one).join('')}</div></div>`).join(''); }
     if (pane === 'open') html += leanMxHtml(a);
+    if (pane === 'eco') html += TIMING.map((T, c) => timingHtml(T, c, a)).join('');
     $(P.el).innerHTML = html;
+    if (pane === 'eco') TIMING.forEach((T, c) => timingTips($(P.el).querySelector(`.timing[data-c="${c}"]`)));
     if (pane === 'open') Z.tips($(P.el), '.leanmx td', el => {
       const g = +el.dataset.g, w = +el.dataset.w; const [lo, hi] = wilson(w, g);
       return `<b>${esc(el.dataset.r)}</b> <span class="d">vs ${esc(el.dataset.c)}</span>
@@ -580,6 +604,42 @@ window.ZH_READY.then(function (Z) {
         <tr><th class="l">Win Rate</th><td>${g ? fmtPct1(w / g) : '\u2014'}</td></tr><tr><th class="l">95% Interval</th><td>${g ? `${fmtPct1(lo)}\u2013${fmtPct1(hi)}` : '\u2014'}</td></tr></table>`;
     });
     $(P.note).textContent = `bars from 50%: right wins, left loses; whiskers are 95% intervals, faint under ${MIN_READ} games; the count is the bin\u2019s player-games \u00b7 ` + (pane === 'play' ? 'a play = a group over the 3/4 line before the clock with an order at something of theirs, named as on the Build orders tab; a player with several plays counts once in each; ' + (all ? 'every one by games, most first - the lists scroll' : `the top ${TOP_DYN} by games, the rest as other`) : pane === 'open' ? 'scores are the Opening posture tab\u2019s; a play = a group sent at something of theirs; the Leaning matrix is the row\u2019s win rate against the column\u2019s leaning, at the same clock' : pane === 'eco' ? 'by the clock from the build-order data; whole game from the unit-mix counts; eco spend = supplies, gatherers, the capture upgrade and capturers, at sticker prices' : 'shares and the main unit by sticker cost of the army units out of production; whole game from the unit-mix counts') + ' \u00b7 correlation, not cause';
+  }
+  // --- supply / derrick timing against the win rate -----------------------------------------------------------
+  // a grid per chart: a row per ordinal (the first supply, the second ...), a column per when it went down, the
+  // cell = how often that player went on to win, shaded from 50% as the matchup grid, the games under it; faint
+  // under T_MINB games (MIN_READ, as the facets). Unlike the game-length curve the two seats of a game sit in
+  // different columns, so a symmetric selection still says something. The last columns: not by 5:00, and any time.
+  const T_MINB = 30;
+  function timingCells(T, c, a) {
+    const A = a.timing[c], last = T_NB - 1, rows = [];
+    for (let k = 0; k < T.n; k++) {
+      const cells = T_COLS.map(([t0, t1]) => { let g = 0, w = 0; for (let b = t0 / T_RES; b < t1 / T_RES; b++) { const o = (k * T_NB + b) * 2; g += A[o]; w += A[o + 1]; } return [g, w]; });
+      const o = (k * T_NB + last) * 2, any = cells.reduce((s, [g, w]) => [s[0] + g, s[1] + w], [0, 0]);
+      cells.push([A[o], A[o + 1]], any);
+      if (any[0] >= T_MINB) rows.push({ k, cells });
+    }
+    return rows;
+  }
+  const T_HEAD = T_COLS.map(([t0, t1]) => `${CLK(t0)}\u2013${CLK(t1)}`).concat('not by 5:00', 'any time');
+  function timingHtml(T, c, a) {
+    const rows = timingCells(T, c, a), title = `<div class="gh">${T.title}</div>`;
+    if (!rows.length) return `<div class="ogrp timing" data-c="${c}">${title}<div class="empty">Not enough games to show.</div></div>`;
+    const cols = T_HEAD.map((_, j) => j).filter(j => rows.some(r => r.cells[j][0]));   // a derrick is never captured before 1:00: the empty columns go
+    const td = (r, j) => { const [g, w] = r.cells[j], wr = g ? w / g : 0, thin = g < T_MINB, cls = [thin ? 'thin' : '', j === T_HEAD.length - 1 ? 'col-all' : ''].join(' ');
+      return `<td class="${cls}" style="${thin ? '' : shade(wr, g)}" data-r="${ORD[r.k]} ${T.what}" data-c="${T_HEAD[j]}" data-g="${g}" data-w="${w}">${g ? `<b>${fmtPct(wr)}</b><small>${fmtInt(g)}</small>` : '<b>\u2014</b>'}</td>`; };
+    return `<div class="ogrp timing" data-c="${c}">${title}<div class="hm-wrap"><table class="hm"><thead><tr><th></th>${cols.map(j => `<th class="${j >= T_COLS.length ? 'col-all' : ''}">${T_HEAD[j]}</th>`).join('')}</tr></thead><tbody>
+      ${rows.map(r => `<tr><th>${ORD[r.k]} ${T.what}</th>${cols.map(j => td(r, j)).join('')}</tr>`).join('')}</tbody></table></div>
+      <div class="note">a row per ${T.what} in the order they were ${T.verb}, a column per when (the pane\u2019s clock does not apply; the window is 5:00); the cell is how often that player went on to win, shaded from 50%, the games under it, faint under ${T_MINB} \u00b7 correlation, not cause</div></div>`;
+  }
+  function timingTips(box) {
+    if (!box) return;
+    Z.tips(box, 'td', el => {
+      const g = +el.dataset.g, w = +el.dataset.w; const [lo, hi] = wilson(w, g);
+      return `<b>${esc(el.dataset.r)}</b> <span class="d">${esc(el.dataset.c)}</span>
+        <table><tr><th class="l">Games</th><td>${fmtInt(g)}</td></tr><tr><th class="l">Won</th><td>${fmtInt(w)}</td></tr>
+        <tr><th class="l">Win Rate</th><td>${g ? fmtPct1(w / g) : '\u2014'}</td></tr><tr><th class="l">95% Interval</th><td>${g ? `${fmtPct1(lo)}\u2013${fmtPct1(hi)}` : '\u2014'}</td></tr></table>`;
+    });
   }
   function renderFacets(a) {
     const eloBins = ELO.map(([k, l]) => [k, l]).concat([['none', 'unrated']]);
@@ -1067,7 +1127,7 @@ window.ZH_READY.then(function (Z) {
     else if (d.pby) S.pby = +d.pby; else if (d.pord) S.pord = d.pord; else if (d.pall) S.pall = d.pall;
     else return false;
     return true;
-  }, { hide: ['result', 'classes'], only: p => decided(p) });   // the rail counts what the tiles count: seats with a result; classes are the unit-mix page's
+  }, { hide: ['result'], only: p => decided(p) });   // the rail counts what the tiles count: seats with a result
 }).catch(function (err) {
   console.error(err);
   const v = document.getElementById('loading');

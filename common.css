@@ -145,6 +145,7 @@
     display: inline-flex; align-items: center; gap: 6px;
   }
   .chip:hover { border-color: var(--accent); color: var(--ink); }
+  .chip:disabled { opacity: .45; cursor: default; border-color: var(--line-strong); color: var(--ink-2); }
   .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 500; }
   .chip:focus-visible, .seg button:focus-visible, .act:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .chip .sw { width: 9px; height: 9px; border-radius: 2px; background: var(--c); flex: none; }
@@ -218,6 +219,12 @@
   .active .clear:disabled { color: var(--muted); cursor: default; opacity: .6; }
   .active .clear:disabled:hover { border-color: transparent; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  /* the unit pages' class filter: a row under the tiles, the rail's chips laid out flat */
+  .clsbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 12px; margin-bottom: -10px; }   /* closer to the card it heads than main's gap */
+  .clsbar .chips { align-items: center; }
+  .clsbar .sep { width: 1px; height: 18px; background: var(--line-strong); margin: 0 3px; }
+  .clsbar .hint { flex-basis: 100%; text-align: right; }
+  .clsbar:empty { display: none; }
   .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px 12px; min-width: 0; }
   .tile .v { font-size: 26px; font-weight: 600; line-height: 1.1; margin-top: 4px; letter-spacing: -.01em; }
   .tile .d { color: var(--ink-2); font-size: 12px; margin-top: 3px; }
@@ -305,7 +312,7 @@
     --s-inf: #2a78d6; --s-veh: #eb6834; --s-air: #1baf7a; --s-eco: #eda100; --s-oth: #898781; --s-str: #4a3aa7; --tip: #fff;
     font-size: 12px;
   }
-  body.printing aside, body.printing header nav, body.printing header .print, body.printing header .theme, body.printing .ctl, body.printing .seg, body.printing .snap,
+  body.printing aside, body.printing header nav, body.printing header .print, body.printing header .theme, body.printing .ctl, body.printing .seg, body.printing .snap, body.printing .clsbar,
   body.printing .loading, body.printing #tip, body.printing .active .clear, body.printing .hint, body.printing .foot .base-key { display: none !important; }
   body.printing header { padding: 0 0 8px; }
   body.printing .app { display: block; min-height: 0; }
