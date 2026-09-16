@@ -147,7 +147,7 @@
 <script src="common.js"></script>
 <script>
 window.ZH_READY.then(function (Z) {
-  const { D, F, CLASSES, CLS_COLOR, TOTAL_PG, $, esc, fmtPct, fmtInt, fmtMoney, fmtMoneyK, seg } = Z;
+  const { D, F, CLASSES, CLS_COLOR, TOTAL_PG, TOTAL_GAMES, $, esc, fmtPct, fmtInt, fmtMoney, fmtMoneyK, seg } = Z;
   const CT = D.ctemplates || [];
   // what the field calls a unit (the user, 2026-09-14): shown under the new name, the old one kept on "o" so a search finds both
   const RENAME = [['Tunnel Defender', 'RPG Trooper']];
@@ -239,7 +239,7 @@ window.ZH_READY.then(function (Z) {
       const r = rows[rowOf(hi, cap)], m = r.loads || (r.loads = new Map());
       m.set(li, (m.get(li) || 0) + gv);
     };
-    let games = 0, kills = 0, dest = 0, destN = 0, ne = 0;
+    let games = 0, kills = 0, dest = 0, destN = 0, ne = 0, ngames = 0;   // games = selected seats (the unit of every figure); ngames = the games they sit in (the tile)
     const cap = M.length, elos = new Float64Array(cap), perKills = new Float64Array(cap), perDest = new Float64Array(cap), lengths = new Float64Array(cap);
     const byCls = new Float64Array(NC), lostCls = new Float64Array(NC), byClsN = new Float64Array(NC), lostClsN = new Float64Array(NC);
     const ons = new Array(D.games.length).fill(null);   // per game, the seats that passed - versus() reads the games again
@@ -260,6 +260,7 @@ window.ZH_READY.then(function (Z) {
         lengths[games - 1] = g.t;
         p._gi = games - 1;
       }
+      if (any) ngames++;
       if (!any) continue;
       ons[gi] = on;
       const cb = g.cb || [];
@@ -322,7 +323,7 @@ window.ZH_READY.then(function (Z) {
     const rowIx = (ti, cap) => { const ix = cap ? ti + NT : ti; return keyIx[ix] >= 0 ? keyIx[ix] : (byKey.get(Z.keyOf(CT[ti]) + (cap ? '\u0000captured' : '')) ?? -1); };
     // per row, the row of the hull a rider fought from (MD (in Humvee) -> Humvee), else -1
     const hullRow = Int32Array.from(rows, r => r.raw.includes('@') && r.bi >= 0 ? rowIx(r.bi, r.captured) : -1);
-    return { rows, byKey, rowIx, hullRow, ons, pairsA, pairsV, games, kills, dest: netOn ? destN : dest, byCls: netOn ? byClsN : byCls, lostCls: netOn ? lostClsN : lostCls,
+    return { rows, byKey, rowIx, hullRow, ons, pairsA, pairsV, games, ngames, kills, dest: netOn ? destN : dest, byCls: netOn ? byClsN : byCls, lostCls: netOn ? lostClsN : lostCls,
       elos: stat(elos, ne), perKills: stat(perKills, games), perDest: stat(perDest, games), lengths: stat(lengths, games) };
   }
 
@@ -345,7 +346,7 @@ window.ZH_READY.then(function (Z) {
     // a named unit is a pick, like a bar in the chart
     const unit = r => `<span class="pickable ${S.pick === r.key ? 'on' : ''}" data-key="${esc(r.key)}" title="click to pick ${esc(r.n)}">${esc(r.n)}</span>`;
     $('tiles').innerHTML = `
-      <div class="tile"><div class="lbl">Player-game pairs</div><div class="v">${fmtInt(n)}</div><div class="d">${fmtPct(n / (TOTAL_PG || 1))} of the sample</div></div>
+      <div class="tile"><div class="lbl">Games</div><div class="v">${fmtInt(sel.ngames)}</div><div class="d">${fmtPct(sel.ngames / (TOTAL_GAMES || 1))} of the ${fmtInt(TOTAL_GAMES)} sampled</div></div>
       <div class="tile"><div class="lbl">Average game</div>
         <table class="kv">
           <tr><th></th><td class="h">median</td><td class="h">mean</td></tr>
@@ -379,7 +380,7 @@ window.ZH_READY.then(function (Z) {
     else rows.sort((a, b) => val(b) - val(a));
     const total = rows.length;
     rows = rows.slice(0, CHART_ROWS);
-    if (!rows.length) { const el = $('chart'); el.classList.remove('more'); el.style.maxHeight = ''; el.innerHTML = '<div class="empty">No player-games match these filters.</div>'; $('foot-note').textContent = ''; return; }
+    if (!rows.length) { const el = $('chart'); el.classList.remove('more'); el.style.maxHeight = ''; el.innerHTML = '<div class="empty">No games match these filters.</div>'; $('foot-note').textContent = ''; return; }
     if (S.table) {
       const c = v => v == null ? dash : v === Infinity ? '\u221e' : v.toFixed(2);
       $('chart').innerHTML = `<div class="tbl-wrap"><table><thead><tr>
@@ -442,7 +443,7 @@ window.ZH_READY.then(function (Z) {
       const top = [...sel.rows].sort((a, b) => (b.d + b.l) - (a.d + a.l))[0];
       key = top ? top.key : null;
     }
-    if (key == null) { $('mu-title').textContent = 'Matchups'; $('duo').innerHTML = '<div class="empty">No player-games match these filters.</div>'; $('mu-note').textContent = ''; $('mu-pick').dataset.key = ''; $('mu-pick').querySelector('.search').value = ''; return; }
+    if (key == null) { $('mu-title').textContent = 'Matchups'; $('duo').innerHTML = '<div class="empty">No games match these filters.</div>'; $('mu-note').textContent = ''; $('mu-pick').dataset.key = ''; $('mu-pick').querySelector('.search').value = ''; return; }
     const ai = sel.byKey.get(key), a = sel.rows[ai];
     const netOn = S.dmg === 'netrep', pick = pr => netOn ? pr[1] : pr[0];
     const took = new Map();   // other row index -> [value A took off it, value it took off A, A's kills of it, its kills of A]

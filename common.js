@@ -144,6 +144,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   // marks on the length slider a thumb snaps to when it comes close
   const LEN_MARKS = [[60, '1 h'], [120, '2 h']].filter(([m]) => m < LEN_MAX), LEN_SNAP = 3;
   const TOTAL_PG = D.games.reduce((n, g) => n + (g.t < LEN_MIN ? 0 : g.p.filter(p => p.f != null && D.factions[p.f]).length), 0);
+  const TOTAL_GAMES = D.games.reduce((n, g) => n + (g.t >= LEN_MIN && g.p.some(p => p.f != null && D.factions[p.f]) ? 1 : 0), 0);   // the games those seats sit in
   // starting-cash and format chips come from what the data holds; values with fewer
   // than 10 games fold into 'other'
   const tally = key => { const c = new Map(); for (const g of D.games) c.set(g[key], (c.get(g[key]) || 0) + 1); return c; };
@@ -459,7 +460,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   // --- formatting ----------------------------------------------------------
   const $ = id => document.getElementById(id);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const fmtPct = v => (v * 100).toFixed(v * 100 >= 10 ? 0 : 1) + '%';
+  const fmtPct = v => { const x = v * 100; return x.toFixed(x >= 10 ? 0 : x >= 0.1 || x === 0 ? 1 : 2) + '%'; };   // a sliver keeps a second decimal: 28 of 136k games is 0.02%, not 0.0%
   const fmtPct1 = v => (v * 100).toFixed(1) + '%';
   // grouped like toLocaleString('en-US') (up to 3 decimals), by hand: the locale call is ~10 us and a render
   // of every play row made 50k of them (half a second of one click, 2026-09-14)
@@ -1475,7 +1476,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
 
   const api = {
     D, F, CLASSES, CLS_INDEX, CLS_COLOR, SIDES, FACS, SOURCES, EVENTS, MAPS, ELO, eloBucket, eloId, HIGH_ELO, LOW_ELO, highLevel, lowLevel, LEVELS, MERGE,
-    LEN_MIN, LEN_MAX, TOTAL_PG, CASH, cashKey, FMTS, shortName, NICK, searchText, searchHit,
+    LEN_MIN, LEN_MAX, TOTAL_PG, TOTAL_GAMES, CASH, cashKey, FMTS, shortName, NICK, searchText, searchHit,
     PLAYERS, PLAYER_BY_ID, pidOf, keyOf, opposition, mask, maskWith, seatOrder, whoCap, mirrorGame, maskKey: () => (mask(), maskKey), maskDefault, M_SEAT, M_POP, M_MATCH, M_RESULT, M_FACET, M_ALL, inSample, captured, showCaptured, loadPage: loadPageState, persistPage,
     $, esc, fmtPct, fmtPct1, fmtInt, fmtMoney, fmtMoneyK, fmtCash, fmtPts, wilson, quant, select, mean,
     chip, seg, facet, renderRail, renderActive, bind, tips, showTip, moveTip, hideTip, exportCard, exportPdf,

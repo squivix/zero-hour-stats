@@ -14,7 +14,7 @@
   #bo .items { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; min-width: 0; padding: 2px 0; }   /* the chips, as on the Build orders tab */
   #bo .it { display: inline-flex; align-items: center; gap: 5px; padding: 1px 6px; border-radius: 3px; background: var(--ground); border: 1px solid var(--line); font-size: 12px; white-space: nowrap; line-height: 1.5; color: var(--ink); }
   #bo .it i { width: 7px; height: 7px; border-radius: 2px; background: var(--c); flex: none; }
-  #bo .it.none { color: var(--muted); border-style: dashed; }
+  #bo .it.none, #bo .it.more { color: var(--muted); border-style: dashed; }   /* more: the pooled row's trailing chip, "then anything" */
   #bo .it.army { margin-left: auto; }   /* the army's mix set apart on the right, as on the Build orders tab */
   #bo .wr { grid-template-columns: minmax(0, 1fr) 220px 76px; height: auto; min-height: 26px; }
   #bo .wr .k { white-space: normal; overflow: visible; }
@@ -22,6 +22,9 @@
   #bo.long .rows { max-height: 640px; overflow-y: auto; padding-right: 6px; scrollbar-gutter: stable; }   /* past the top rows the list scrolls */
   #bo.long .rows .wr { content-visibility: auto; contain-intrinsic-size: auto 30px; }
   #bo .rows .bmore { display: flex; gap: 14px; padding: 6px 0 2px; font-size: 12px; color: var(--muted); }
+  /* the confounders callout, the Opening posture tab's blue panel: shown until one matchup is picked */
+  #bohint { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; padding: 10px 12px; border-radius: 4px; background: color-mix(in srgb, var(--s-eco) 14%, var(--surface)); border: 1px solid color-mix(in srgb, var(--s-eco) 45%, var(--line-strong)); }
+  #bohint .hint { flex: 1; font-size: 14px; color: var(--ink); }
   #bo .rows .bmore button { background: none; border: 1px solid var(--line-strong); border-radius: 3px; padding: 1px 8px; font: inherit; font-size: 12px; color: var(--accent); cursor: pointer; }
   /* matchup heatmap */
   .hm-wrap { overflow-x: auto; }
@@ -201,6 +204,7 @@
         <div class="ctl"><span class="lbl">Sort</span><div class="seg" id="bsort"></div></div>
       </div>
       <div class="card-h parts-row"><div class="ctl"><span class="lbl">By</span><div class="seg" id="bby"></div></div><div class="spacer"></div><div class="ctl"><span class="lbl">Describe by</span><div class="parts" id="bparts"></div></div></div>
+      <div id="bohint" hidden><span class="hint">Across matchups a build carries its faction&rsquo;s own strength &mdash; pick one <b>Faction Played</b> and one <b>Against</b> to compare builds on level ground.</span></div>
       <div class="opens" id="bo"></div>
       <div class="foot"><span id="bo-note"></span><a class="how" href="buildorders.html">how builds are described &rarr;</a></div>
     </section>
@@ -291,6 +295,7 @@ window.ZH_READY.then(function (Z) {
   const decided = p => (p.w === 1 && p.ow === 0) || (p.w === 0 && p.ow === 1);   // p.ow: the opposition's shared result
   const expected = (pe, oe) => 1 / (1 + Math.pow(10, (oe - pe) / 400));
   const TOTAL_DEC = D.games.reduce((n, g) => n + (g.t < Z.LEN_MIN ? 0 : g.p.filter(p => D.factions[p.f] && decided(p)).length), 0);
+  const TOTAL_DEC_GAMES = D.games.reduce((n, g) => n + (g.t >= Z.LEN_MIN && g.p.some(p => D.factions[p.f] && decided(p)) ? 1 : 0), 0);   // the games those seats sit in
 
   // faction order for the heatmap: by side, vanilla first
   const ORDER = [...FACS].sort((a, b) => SIDES.indexOf(a.side) - SIDES.indexOf(b.side) || (a.general - b.general) || a.name.localeCompare(b.name));
@@ -358,7 +363,7 @@ window.ZH_READY.then(function (Z) {
   // the key reads (p._bc, per naming and clock - a few ints, not the description) and the id under the parts on
   // (p._bi) - a parts toggle re-keys 300k seats from the packs (~1 us each), only a clock or naming switch describes
   // them again, in slices behind the strip (render); a click back to an earlier setting is in the aggregation memo
-  const BD = window.ZH_BUILDS(Z, PL), B_FWD = 50, BKEY = new Map(), BREP = [];   // BREP[id] = a seat that has the build, to word it
+  const BD = window.ZH_BUILDS(Z, PL), B_FWD = 50, BKEY = new Map(), BREP = [];   // BREP[id] = [a seat that has the build (to word it), its game, the key]
   const OPENN = [];   // the opening groups' wording per naming (builds.js describe)
   const bOn = k => S.bparts.includes(k);
   let B_DS = '', B_ST = '';   // the description's stamp (naming, clock) and the key's (with the parts), set once per pass (bStamps)
@@ -371,7 +376,7 @@ window.ZH_READY.then(function (Z) {
     if (c && c.s === B_ST) return c.id;
     let pk = p._bc; if (!pk || pk.s !== B_DS) pk = p._bc = { s: B_DS, a: BD.pack(buildDesc(p, g)) };
     const key = BD.packKey(pk.a, bOn);
-    let id = BKEY.get(key); if (id == null) { id = BREP.length; BKEY.set(key, id); BREP.push([p, g]); }
+    let id = BKEY.get(key); if (id == null) { id = BREP.length; BKEY.set(key, id); BREP.push([p, g, key]); }
     p._bi = { s: B_ST, id };
     return id;
   }
@@ -502,7 +507,7 @@ window.ZH_READY.then(function (Z) {
   // it in slices (render), the seats it finds cold read and described as it goes
   function aggregateOf() { const A = aggBegin(); let si = 0; for (const g of D.games) { A.step(g, si); si += g.p.length; } return A.done(); }
   function aggBegin() {
-    const n = { games: 0, wins: 0, rated: 0, ratedWins: 0, exp: 0, winLen: null, lossLen: null };
+    const n = { games: 0, ngames: 0, wins: 0, rated: 0, ratedWins: 0, exp: 0, winLen: null, lossLen: null };   // games = selected seats (the unit of every figure); ngames = the games they sit in (the tile)
     const bump = (m, k, w) => { const c = m.get(k) || [0, 0]; c[0]++; c[1] += w; m.set(k, c); };
     // the per-seat tallies land in typed arrays (a string key and a Map per seat was most of the pass) and
     // come out as Maps keyed like the charts expect: cell 'f:o' (o = 'x' no known opponent, 'any')
@@ -521,6 +526,7 @@ window.ZH_READY.then(function (Z) {
     // game lengths in typed arrays (a numeric sort, not a comparator one); the class set and captured flag as bits
     const winLen = new Float64Array(M.length), lossLen = new Float64Array(M.length); let nw = 0, nl = 0;
     function step(g, si) {
+      const g0 = n.games;
       for (let i = 0; i < g.p.length; i++) {
         const m = M[si++], p = g.p[i];
         if ((m & need) !== need) continue;
@@ -555,6 +561,7 @@ window.ZH_READY.then(function (Z) {
           }
         }
       }
+      if (n.games > g0) n.ngames++;
     }
     function done() {
       n.winLen = winLen.slice(0, nw).sort(); n.lossLen = lossLen.slice(0, nl).sort();   // typed arrays sort numerically
@@ -580,7 +587,7 @@ window.ZH_READY.then(function (Z) {
     const exp = n.rated ? n.exp / n.rated : 0, act = n.rated ? n.ratedWins / n.rated : 0, over = act - exp;
     const wl = quant(n.winLen, .5), ll = quant(n.lossLen, .5);
     $('tiles').innerHTML = `
-      <div class="tile"><div class="lbl">Player-game pairs</div><div class="v">${fmtInt(n.games)}</div><div class="d">with a result, ${fmtPct(n.games / (TOTAL_DEC || 1))} of ${fmtInt(TOTAL_DEC)}</div></div>
+      <div class="tile"><div class="lbl">Games</div><div class="v">${fmtInt(n.ngames)}</div><div class="d">with a result, ${fmtPct(n.ngames / (TOTAL_DEC_GAMES || 1))} of ${fmtInt(TOTAL_DEC_GAMES)}</div></div>
       <div class="tile"><div class="lbl">Win rate</div><div class="v ${n.games && !symmetric ? (wr > .5 ? 'good' : wr < .5 ? 'bad' : '') : ''}">${n.games ? fmtPct1(wr) : dash}</div>
         <div class="d">${!n.games ? 'no games match' : symmetric ? 'both players are in the selection \u2014 pick a faction, matchup or rating' : `95% interval ${fmtPct1(lo)}\u2013${fmtPct1(hi)}`}</div></div>
       <div class="tile"><div class="lbl">Against the ratings</div><div class="v ${n.rated ? (over > .01 ? 'good' : over < -.01 ? 'bad' : '') : ''}">${n.rated ? fmtPts(over) + ' pts' : dash}</div>
@@ -766,27 +773,64 @@ window.ZH_READY.then(function (Z) {
   // the list scrolls; the page count is kept across clicks until "top 12" folds it back (the user, 2026-09-16)
   const B_TOP = 12, B_MORE = 50;
   let B_N = B_TOP, BO = null;   // rows shown; the list drawn, for "show more" to extend without a render: {top, N, label, at}
+  // the rows: a build with MIN_READ games stands on its own; a thinner one is pooled with its siblings into the
+  // longest opening they share that has MIN_READ games, a row worded by that prefix and a trailing "..." chip (the
+  // user, 2026-09-16: a popular build with many variations was split over thin rows and never reached the win-rate
+  // sort). The keys are a path (chip|chip|...), so a trie over them: a node with a thick child splits it off and
+  // keeps the rest (its exact seats + thin tails) as its own row; a node with none is one row, all its tails in
+  function poolBuilds(builds) {
+    const mk = () => ({ g: 0, w: 0, nl: 0, ch: new Map(), rep: -1, rg: 0, ex: -1, eg: 0 });   // nl = leaves at or below; rep = the heaviest leaf strictly below (worded, cut to the depth); ex = the leaf here
+    const root = mk();
+    for (const [id, [g, w]] of builds) {
+      const segs = BREP[id][2].split('|');
+      let n = root;
+      for (let i = 0; ; i++) {
+        n.g += g; n.w += w; n.nl++;
+        if (i === segs.length) { n.ex = id; n.eg = g; break; }
+        if (g > n.rg) { n.rg = g; n.rep = id; }
+        let c = n.ch.get(segs[i]); if (!c) { c = mk(); n.ch.set(segs[i], c); }
+        n = c;
+      }
+    }
+    const rows = [];   // {rep, depth, pooled, g, w, fl (leaves folded), fg (their games)}
+    (function cut(n, depth) {
+      let g = n.g, w = n.w, nl = n.nl;
+      for (const c of n.ch.values()) if (c.g >= MIN_READ) { g -= c.g; w -= c.w; nl -= c.nl; cut(c, depth + 1); }
+      if (!g) return;
+      const pooled = g > n.eg;
+      rows.push({ rep: pooled ? n.rep : n.ex, depth, pooled, g, w, fl: nl - (n.ex >= 0 ? 1 : 0), fg: g - n.eg });
+    })(root, 0);
+    return rows;
+  }
   function renderBuilds(a) {
     seg($('bby'), [[120, '2:00'], [180, '3:00'], [240, '4:00'], [300, '5:00']].map(([v, l]) => [String(v), l]), String(S.bby), 'data-bby');
     $('bparts').innerHTML = BD.PARTS.map(([k, l, c]) => `<button class="chip" aria-pressed="${bOn(k)}" data-bpart="${k}" style="--c:var(${c})"><span class="sw"></span><span>${esc(l)}</span></button>`).join('');
     seg($('bsort'), [['games', 'Most played'], ['wr', 'Win rate']], S.bsort, 'data-bsort');
     $('clock-bby').textContent = 'by ' + CLK(S.bby);
+    // one matchup: a faction played against one faction (or its mirror), or 1v1 finders each naming one faction
+    const oneMU = (F.facs.length === 1 && (F.opp.length === 1 || F.mirror)) || (F.who.length === 2 && F.who.every(w => w.f.length === 1));
+    $('bohint').hidden = oneMU;
     BO = null;
     if (!READS_ON) { $('bo').innerHTML = `<div class="empty reading">${Z.progressHTML(readsNote(), readsAt)}</div>`; $('bo-note').textContent = ''; return; }
     if (!S.bparts.length) { $('bo').innerHTML = '<div class="empty">Pick at least one part to describe by.</div>'; $('bo-note').textContent = ''; return; }
-    // by games, or by win rate among the builds with MIN_READ games (one game wins 100% or 0%), the thinner ones
-    // after by games - each order once per aggregation (100k builds)
-    const wr = S.bsort === 'wr', top = a.btop || (a.btop = [...a.builds].sort((x, y) => y[1][0] - x[1][0]));
-    const list = !wr ? top : a.bwr || (a.bwr = [...top].sort(([, x], [, y]) => (y[0] >= MIN_READ) - (x[0] >= MIN_READ) || (x[0] >= MIN_READ ? y[1] / y[0] - x[1] / x[0] || y[0] - x[0] : y[0] - x[0])));
+    // by games, or by the win rate's 95% lower bound (the whisker's left end: a 60% on 3,000 games ranks above a
+    // 90% on 30 - the user, 2026-09-16) among the builds with MIN_READ games, the thinner ones after by games -
+    // each order once per aggregation
+    const R = a.brows || (a.brows = poolBuilds(a.builds));
+    const wr = S.bsort === 'wr', top = a.btop || (a.btop = R.map((r, i) => [i, [r.g, r.w]]).sort((x, y) => y[1][0] - x[1][0]));
+    const lo = ([, [g, w]]) => g >= MIN_READ ? wilson(w, g)[0] : -1;
+    const list = !wr ? top : a.bwr || (a.bwr = top.map(r => [r, lo(r)]).sort(([x, xl], [y, yl]) => yl - xl || y[1][0] - x[1][0]).map(([r]) => r));
     if (!top.length) { $('bo').innerHTML = '<div class="empty">No games with a recorded result match these filters.</div>'; $('bo-note').textContent = ''; return; }
     const N = top.reduce((s, [, v]) => s + v[0], 0), shown = list.slice(0, B_N), m = new Map(shown.map(([id, v]) => [String(id), v]));
-    const chipsOf = id => { const [p, g] = BREP[id]; return BD.chipsOf(buildDesc(p, g), bSide(p), bOn, true); };
-    const bins = shown.map(([id]) => [String(id), id]);
-    const label = (k, id) => id < 0 ? `<span class="items"><span class="it none"><i></i>every other build</span></span>` : `<span class="items">${chipsOf(id).map(it => `<span class="it${it.none ? ' none' : ''}${it.part === 'units' ? ' army' : ''}" style="--c:${it.c}"><i></i>${esc(BD.cap(it.n))}</span>`).join('')}</span>`;
-    $('bo').innerHTML = `<div class="facets" style="grid-template-columns: 1fr">${facet(`Builds<small class="sp">${fmtInt(top.length)} distinct, the most played ${fmtPct(top[0][1][0] / N)} of ${fmtInt(N)} player-games</small>`, bins, m, label)}</div>`;
+    // a row's chips: its representative seat's, cut to the row's depth when pooled, then the "..." chip for the tails folded in
+    const chipsOf = r => { const [p, g] = BREP[r.rep], ch = BD.chipsOf(buildDesc(p, g), bSide(p), bOn, true); return r.pooled ? ch.slice(0, r.depth) : ch; };
+    const bins = shown.map(([i]) => [String(i), i]);
+    const more = r => r.pooled ? `<span class="it more" title="then anything: ${fmtInt(r.fl)} thinner build${r.fl === 1 ? '' : 's'} (under ${MIN_READ} games each, ${fmtInt(r.fg)} in all) sharing these chips, pooled in${r.g > r.fg ? ` with the ${fmtInt(r.g - r.fg)} that stop here` : ''}">${r.depth ? '\u2026' : 'any other build \u2026'}</span>` : '';
+    const label = (k, i) => i < 0 ? `<span class="items"><span class="it none"><i></i>every other build</span></span>` : `<span class="items">${chipsOf(R[i]).map(it => `<span class="it${it.none ? ' none' : ''}${it.part === 'units' ? ' army' : ''}" style="--c:${it.c}"><i></i>${esc(BD.cap(it.n))}</span>`).join('')}${more(R[i])}</span>`;
+    $('bo').innerHTML = `<div class="facets" style="grid-template-columns: 1fr">${facet(`Builds<small class="sp">${fmtInt(top.length)} rows from ${fmtInt(a.builds.size)} distinct, the most played ${fmtPct(top[0][1][0] / N)} of ${fmtInt(N)} player-games</small>`, bins, m, label)}</div>`;
     BO = { top: list, label, at: shown.length };
     buildsTail();
-    $('bo-note').textContent = `bars from 50%: right wins, left loses; whiskers are 95% intervals, faint under ${MIN_READ} games; the count is the build\u2019s player-games \u00b7 the builds ${wr ? `by win rate among those with ${MIN_READ}+ games, the thinner ones after by games` : 'by games, most first'}, the rest folded into one row - show more adds ${B_MORE} at a time and the list scrolls \u00b7 a build is described as on the Build orders tab by the clock in the title: the builders out of the command center, the supplies before any play left, the gatherers, the opening group (what the starting cash bought) then each later structure, expansion or play in order, and the army\u2019s mix; switch parts off for coarser builds \u00b7 correlation, not cause`;
+    $('bo-note').textContent = `bars from 50%: right wins, left loses; whiskers are 95% intervals, faint under ${MIN_READ} games; the count is the build\u2019s player-games \u00b7 the builds ${wr ? `by the lower end of the win rate\u2019s 95% interval among those with ${MIN_READ}+ games (a sure 60% ranks above a lucky 90%), the thinner ones after by games` : 'by games, most first'}, the rest folded into one row - show more adds ${B_MORE} at a time and the list scrolls \u00b7 a build with under ${MIN_READ} games is pooled with its siblings into the longest opening they share that has ${MIN_READ}+, a row ending in \u2026 (hover it for what was folded) \u00b7 a build is described as on the Build orders tab by the clock in the title: the builders out of the command center, the supplies before any play left, the gatherers, the opening group (what the starting cash bought) then each later structure, expansion or play in order, and the army\u2019s mix; switch parts off for coarser builds \u00b7 correlation, not cause`;
   }
   // the list's tail: the rest as one row, then the show more / top 12 controls - redrawn as pages are added
   function buildsTail() {

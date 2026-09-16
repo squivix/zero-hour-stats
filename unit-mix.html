@@ -103,7 +103,7 @@
 <script src="common.js"></script>
 <script>
 window.ZH_READY.then(function (Z) {
-  const { D, F, CLASSES, CLS_COLOR, TOTAL_PG, $, esc, fmtPct, fmtInt, fmtMoney, fmtMoneyK, seg } = Z;
+  const { D, F, CLASSES, CLS_COLOR, TOTAL_PG, TOTAL_GAMES, $, esc, fmtPct, fmtInt, fmtMoney, fmtMoneyK, seg } = Z;
 
   const METRICS = [
     ['share', 'Share of units', v => fmtPct(v)],
@@ -119,7 +119,7 @@ window.ZH_READY.then(function (Z) {
     const units = new Map();   // key -> {n, raw, cls, cost, count, present, spend, sides (side bits)}
     // the loop's accumulators stay plain locals: nothing below the loop closes over them (a captured
     // counter lives in a heap context, and 3M increments through one cost 100 ms)
-    let games = 0, total = 0, spend = 0, ne = 0;
+    let games = 0, total = 0, spend = 0, ne = 0, ngames = 0;   // games = selected seats (the unit of every figure); ngames = the games they sit in (the tile)
     const M = Z.mask(), cap = M.length;   // a word of filter bits per seat, in this same order
     // one entry per player-game, in typed arrays; the medians come out by selection, not a sort
     const elos = new Float64Array(cap), perUnits = new Float64Array(cap), perSpend = new Float64Array(cap), lengths = new Float64Array(cap);
@@ -131,6 +131,7 @@ window.ZH_READY.then(function (Z) {
     let si = 0;
     for (const g of D.games) {
       const base = Z.inSample(g);   // baseline = uniform sample only
+      const g0 = games;
       for (let i = 0; i < g.p.length; i++) {
         const m = M[si++], p = g.p[i];
         if (filterPop ? (m & Z.M_ALL) !== Z.M_ALL : !(base && (m & Z.M_SEAT))) continue;
@@ -162,6 +163,7 @@ window.ZH_READY.then(function (Z) {
         }
         perUnits[games - 1] = myUnits; perSpend[games - 1] = mySpend;
       }
+      if (games > g0) ngames++;
     }
     const G = games, T = total, SP = spend;
     const rows = [...units.values()].map(u => ({
@@ -175,7 +177,7 @@ window.ZH_READY.then(function (Z) {
     CLASSES.forEach((c, i) => { byCls[c[0]] = byClsA[i]; spendCls[c[0]] = spendClsA[i]; });
     byCls.structure = byClsA[NC - 1]; spendCls.structure = spendClsA[NC - 1];
     const stat = (a, n) => ({ n, median: Z.select(a, n, .5), mean: Z.mean(a.subarray(0, n)) });
-    return { rows, games: G, total: T, spendTotal: SP, byCls, spendCls, elos: stat(elos, ne), perUnits: stat(perUnits, G), perSpend: stat(perSpend, G), lengths: stat(lengths, G) };
+    return { rows, games: G, ngames, total: T, spendTotal: SP, byCls, spendCls, elos: stat(elos, ne), perUnits: stat(perUnits, G), perSpend: stat(perSpend, G), lengths: stat(lengths, G) };
   }
   // --- rendering ---------------------------------------------------------
   function renderControls() {
@@ -192,7 +194,7 @@ window.ZH_READY.then(function (Z) {
     const row = (k, med, avg) => `<tr><th>${k}</th><td class="m">${med}</td><td class="a">${avg}</td></tr>`;
     const dash = '\u2014';
     $('tiles').innerHTML = `
-      <div class="tile"><div class="lbl">Player-game pairs</div><div class="v">${fmtInt(n)}</div><div class="d">${fmtPct(n / (TOTAL_PG || 1))} of the dataset</div></div>
+      <div class="tile"><div class="lbl">Games</div><div class="v">${fmtInt(sel.ngames)}</div><div class="d">${fmtPct(sel.ngames / (TOTAL_GAMES || 1))} of ${fmtInt(TOTAL_GAMES)}</div></div>
       <div class="tile"><div class="lbl">Average game</div>
         <table class="kv">
           <tr><th></th><td class="h">median</td><td class="h">mean</td></tr>
@@ -212,7 +214,7 @@ window.ZH_READY.then(function (Z) {
     const baseByKey = new Map(all.rows.map(r => [r.key, r]));
     let rows = [...sel.rows].sort((a, b) => b[S.metric] - a[S.metric]);
     if (S.top) rows = rows.slice(0, S.top);
-    if (!rows.length) { $('chart').innerHTML = '<div class="empty">No player-games match these filters.</div>'; $('foot-note').textContent = ''; return; }
+    if (!rows.length) { $('chart').innerHTML = '<div class="empty">No games match these filters.</div>'; $('foot-note').textContent = ''; return; }
     const max = Math.max(...rows.map(r => Math.max(r[S.metric], (baseByKey.get(r.key) || {})[S.metric] || 0)));
     if (S.table) {
       $('chart').innerHTML = `<div class="tbl-wrap"><table><thead><tr>

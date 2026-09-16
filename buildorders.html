@@ -14,6 +14,9 @@
   .seq-rows { display: flex; flex-direction: column; gap: 4px; }
   #desc.more { overflow-y: auto; padding-right: 4px; }   /* past the top 25 the pane keeps its height and scrolls */
   .seq-more { display: flex; gap: 8px; justify-content: center; padding: 8px 0 2px; }   /* the last item of the list */
+  /* the confounders callout, as on the Win rates tab's build-order card: shown until one matchup is picked */
+  #bohint { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; padding: 10px 12px; border-radius: 4px; background: color-mix(in srgb, var(--s-eco) 14%, var(--surface)); border: 1px solid color-mix(in srgb, var(--s-eco) 45%, var(--line-strong)); }
+  #bohint .hint { flex: 1; font-size: 14px; color: var(--ink); }
   /* the factored card: one plot per element of a build, each a list of its values with share and win rate */
   .frows { display: flex; flex-direction: column; gap: 26px; }   /* two rows of two: the plots by the clock, then the mixes without one */
   .frows .two { grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); align-items: start; }
@@ -266,6 +269,7 @@
         <div class="ctl"><div class="seg" id="descmode"></div></div>
       </div>
       <div class="card-h parts-row"><div class="ctl"><span class="lbl">By</span><div class="seg" id="by"></div></div><div class="spacer"></div><div class="ctl"><span class="lbl">Describe by</span><div class="parts" id="parts"></div></div></div>
+      <div id="bohint" hidden><span class="hint">Across matchups a build carries its faction&rsquo;s own strength &mdash; pick one <b>Faction Played</b> and one <b>Against</b> to compare builds on level ground.</span></div>
       <div id="desc"></div>
       <div class="foot"><span id="desc-note"></span><a class="how" href="plays.html">how plays are detected and named &rarr;</a></div>
     </section>
@@ -377,7 +381,7 @@
 <script src="terrain.js"></script>
 <script>
 window.ZH_READY.then(function (Z) {
-  const { D, F, CLS_COLOR, TOTAL_PG, $, esc, fmtPct, fmtInt, seg, shortName } = Z;
+  const { D, F, CLS_COLOR, TOTAL_GAMES, $, esc, fmtPct, fmtInt, seg, shortName } = Z;
   // the plays' naming, the structure items and their counted wording live in plays.js, shared with the Win rates tab (2026-09-14)
   const PL = window.ZH_PLAYS(Z);
   const { soAt, soNext, SC, UPGS, FAMILIES, TARGET, targetOf, CRUSHES, SHORT_UNIT, rawName, mergedName, unitName, LOAD_ORDER, loadRank, loadName, FIXED, HUMVEE_BALL, LONE, ARMY,
@@ -687,7 +691,7 @@ window.ZH_READY.then(function (Z) {
     DESC = desc;
     window.ZH_BO = { DESC, seats, chipsOf };   // console hook: the builds table behind the card
     const N = seats.length;
-    if (!N) { $('desc').innerHTML = '<div class="empty">No player-games match these filters.</div>'; $('desc-note').textContent = ''; return; }
+    if (!N) { $('desc').innerHTML = '<div class="empty">No games match these filters.</div>'; $('desc-note').textContent = ''; return; }
     if (!S.parts.length) { $('desc').innerHTML = '<div class="empty">Pick at least one part to describe by.</div>'; $('desc-note').textContent = ''; return; }
     const facsOf = r => [...r.facs.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([f, n]) => `${shortName(D.factions[f])} ${fmtPct(n / r.n)}`).join(', ');
     if (S.table) {
@@ -755,7 +759,7 @@ window.ZH_READY.then(function (Z) {
   }
   function mirrorDesc(seats, N) {
     const el = $('desc-2');
-    if (!N) { el.innerHTML = '<div class="empty">No player-games match these filters.</div>'; $('desc-note-2').textContent = ''; return; }
+    if (!N) { el.innerHTML = '<div class="empty">No games match these filters.</div>'; $('desc-note-2').textContent = ''; return; }
     const by = S.by, k = S.fu;
     const tally = () => new Map();
     const CLS = [['infantry', 'infantry'], ['vehicle', 'vehicles'], ['aircraft', 'aircraft']];   // the unit plots, one per class
@@ -982,7 +986,7 @@ window.ZH_READY.then(function (Z) {
     }
     SEQ = [...sig.values()].sort((a, b) => b.n - a.n);
     const N = seats.length, rows = SEQ.slice(0, 25), cur = S.prefix.join('');
-    if (!N) { $('seqs').innerHTML = '<div class="empty">No player-games match these filters.</div>'; $('seq-note').textContent = ''; return; }
+    if (!N) { $('seqs').innerHTML = '<div class="empty">No games match these filters.</div>'; $('seq-note').textContent = ''; return; }
     if (S.seqTable) {
       $('seqs').innerHTML = `<div class="tbl-wrap"><table><thead><tr><th class="l">Sequence</th><th>Games</th><th>Share</th><th>Win Rate</th><th>With Result</th><th>Last At</th></tr></thead><tbody>${rows.map(r =>
         `<tr><td class="l">${r.its.length ? esc(r.its.map(i => i.n).join(' \u203a ')) : '<span class="d">nothing inside the window</span>'}</td><td>${fmtInt(r.n)}</td><td>${fmtPct(r.n / N)}</td><td>${r.nw ? fmtPct(r.w / r.nw) : '\u2014'}</td><td>${fmtInt(r.nw)}</td><td>${r.its.length ? fmtT(median(r.t[r.its.length - 1])) : '\u2014'}</td></tr>`).join('')}</tbody></table></div>`;
@@ -1031,7 +1035,7 @@ window.ZH_READY.then(function (Z) {
       `<span class="it" style="--c:${it.c}" data-cut="${j}" title="remove this and what follows"><i></i>${esc(it.n)}${meds[j].length ? `<small>${fmtT(median(meds[j]))}</small>` : ''}</span>`).join('<span class="arrow">\u203a</span>')
       + (L ? `<button class="act" data-clearprefix="1">clear</button>` : '') + `<span class="hint" style="margin-left:auto">${fmtInt(n)} player-games follow this path${nw ? ` \u00b7 they win ${fmtPct(w / nw)} of ${fmtInt(nw)}` : ''}${cashLine ? ` \u00b7 ${cashLine}` : ''}</span>`;
     const rows = [...next.values()].sort((a, b) => b.n - a.n).slice(0, 20);
-    if (!n) { $('next').innerHTML = '<div class="empty">No player-game in the selection follows this path.</div>'; $('next-note').textContent = ''; return; }
+    if (!n) { $('next').innerHTML = '<div class="empty">No game in the selection follows this path.</div>'; $('next-note').textContent = ''; return; }
     const max = rows[0].n / n;
     $('next').innerHTML = rows.map((r, i) => `<div class="nx${r.nw < 20 ? ' thin' : ''}" data-i="${i}" style="--c:${r.it.c}">
       <div class="name"><i></i><span title="${esc(r.it.raw || r.it.n)}">${esc(r.it.n)}</span></div>
@@ -1612,7 +1616,7 @@ window.ZH_READY.then(function (Z) {
       // for every map"), drawn from the raster the card would draw anyway, when the tile scrolls into view
       const pick = maps.filter(([id]) => id >= 0).map(([id, n]) => { const m = Z.MAPS.find(x => x.id === id); return `<button class="mapthumb" data-mapto="${id}" data-crc="${esc(m ? m.crc : '')}" data-name="${esc(m ? m.name : '?')}" title="${esc(m ? Z.mapFacts(m) || m.name : '?')}"><div class="th"><canvas width="1" height="1"></canvas></div><span>${esc(m ? m.name : '?')}</span><small>${fmtPct(n / N)}</small></button>`; }).join('');
       const old = wrap.querySelector('.empty'); if (old) old.remove();
-      wrap.insertAdjacentHTML('beforeend', `<div class="empty">${N ? `<span class="picktitle disp">Pick a map</span><div class="pickbar"><input id="mapthq" class="search" type="search" placeholder="find a map\u2026" value="${esc(THUMB_Q)}" autocomplete="off" aria-label="find a map"><div class="map-tools" id="mapthf">${Z.mapFacetControls()}</div></div><div class="maps">${pick}</div>` : 'no player-games in the selection'}</div>`);
+      wrap.insertAdjacentHTML('beforeend', `<div class="empty">${N ? `<span class="picktitle disp">Pick a map</span><div class="pickbar"><input id="mapthq" class="search" type="search" placeholder="find a map\u2026" value="${esc(THUMB_Q)}" autocomplete="off" aria-label="find a map"><div class="map-tools" id="mapthf">${Z.mapFacetControls()}</div></div><div class="maps">${pick}</div>` : 'no games in the selection'}</div>`);
       wrap.querySelectorAll('.mapthumb').forEach(b => THUMBS.observe(b));
       thumbFilter(wrap);
       $('map-note').textContent = ''; $('maptitle').textContent = '';
@@ -1760,12 +1764,13 @@ window.ZH_READY.then(function (Z) {
     const elos = new Float64Array(N); let ne = 0;
     for (const s of seats) if (s.p.e != null) elos[ne++] = s.p.e;
     const eloMed = ne ? Z.select(elos, ne, .5) : null;
+    const NG = new Set(seats.map(s => s.g)).size;   // the games the selected seats sit in (the tile; every other figure is per seat)
     // the CC sale (the user, 2026-09-14): anywhere in the order stream the library keeps (its first 10 minutes)
     let withBo = 0; const soldT = [];
     for (const s of seats) { const f = s.trio; if (!f) continue; withBo++; if (f.sold != null) soldT.push(f.sold); }
     $('tiles').innerHTML = `
-      <div class="tile"><div class="lbl">Player-games</div><div class="v">${fmtInt(N)}</div><div class="d">${fmtPct(N / (TOTAL_PG || 1))} of the library${eloMed != null ? ` \u00b7 median ELO ${fmtInt(eloMed)}` : ''}</div></div>
-      <div class="tile"><div class="lbl">Command Center Sold</div><div class="v">${withBo ? fmtPct(soldT.length / withBo) : dash}</div><div class="d">${withBo ? `of ${fmtInt(withBo)} player-games with their order stream${soldT.length ? `, median at ${fmtT(median(soldT))}` : ''}` : 'no order streams in the selection'}</div></div>
+      <div class="tile"><div class="lbl">Games</div><div class="v">${fmtInt(NG)}</div><div class="d">${fmtPct(NG / (TOTAL_GAMES || 1))} of the library${eloMed != null ? ` \u00b7 median ELO ${fmtInt(eloMed)}` : ''}</div></div>
+      <div class="tile"><div class="lbl">Command Center Sold</div><div class="v">${withBo ? fmtPct(soldT.length / withBo) : dash}</div><div class="d">${withBo ? `of ${fmtInt(withBo)} players with their order stream${soldT.length ? `, median at ${fmtT(median(soldT))}` : ''}` : 'no order streams in the selection'}</div></div>
       <div class="tile"><div class="lbl">Most common build <span class="clock">by ${fmtT(S.by)}</span></div><div class="v small">${top ? esc(top.text) : dash}</div><div class="d">${top ? fmtPct(top.n / N) + ' of the selection \u00b7 supplies and the opening production' : ''}</div></div>
       <div class="tile wide"><div class="lbl">Supply timings<small>placed, in order</small></div>${supplyLanes(seats, N)}</div>
       <div class="tile wide"><div class="lbl">Oil Derrick timings<small>capture ordered, in order</small></div>${derrickLanes(seats, N)}</div>`;
@@ -1839,11 +1844,13 @@ window.ZH_READY.then(function (Z) {
   const PASS_MIN = 6000;   // seats to describe in one block rather than in slices (~50 ms)
   let JOB = 0, PAINTED = false;
   function render() {
+    // one matchup: a faction played against one faction (or its mirror), or 1v1 finders each naming one faction (as the Win rates tab's card)
+    $('bohint').hidden = (F.facs.length === 1 && (F.opp.length === 1 || F.mirror)) || (F.who.length === 2 && F.who.every(w => w.f.length === 1));
     const job = ++JOB;
     Z.renderActive(); renderControls();
     const all = allPeek();
     if (!all) {   // the records for this window and naming: a pass over every game
-      const b = allBuilder(), label = `indexing ${fmtInt(TOTAL_PG)} player-games\u2026`;
+      const b = allBuilder(), label = `indexing ${fmtInt(TOTAL_GAMES)} games\u2026`;
       Z.working(label);
       Z.chunked(b.n, b.step, { token: () => job === JOB, ms: PAINTED ? 40 : 300, at: f => { Z.workingAt(f); if (!PAINTED) window.ZH_LOAD.step(label + ' ' + Math.round(f * 100) + '%', .86 + .04 * f); } })
         .then(ok => { if (!ok || job !== JOB) return; b.finish(); render(); });
@@ -1851,7 +1858,7 @@ window.ZH_READY.then(function (Z) {
     }
     const todo = stale(all);
     if (todo.length >= PASS_MIN) {
-      const { descKey, movesKey, fuKey } = CACHE, k = S.fu, label = `describing ${fmtInt(todo.length)} player-games\u2026`;
+      const { descKey, movesKey, fuKey } = CACHE, k = S.fu, label = `describing ${fmtInt(todo.length)} builds\u2026`;
       Z.working(label);
       Z.chunked(todo.length, (i0, i1) => { for (let i = i0; i < i1; i++) refresh(todo[i], descKey, movesKey, fuKey, k); }, { token: () => job === JOB, ms: PAINTED ? 40 : 300, at: f => { Z.workingAt(f); if (!PAINTED) window.ZH_LOAD.step(label + ' ' + Math.round(f * 100) + '%', .9 + .05 * f); } })
         .then(ok => { if (!ok || job !== JOB) return; render(); });
@@ -1861,7 +1868,7 @@ window.ZH_READY.then(function (Z) {
     const seats = collect(), stamp = ckStamp(), cold = [];
     if (!DESC_MEMO.has(descMemoKey())) for (let i = 0; i < seats.length; i++) if (seats[i].cks !== stamp) cold.push(seats[i]);
     if (cold.length >= PASS_MIN) {
-      const label = `keying the builds of ${fmtInt(cold.length)} player-games\u2026`;
+      const label = `keying ${fmtInt(cold.length)} builds\u2026`;
       Z.working(label);
       Z.chunked(cold.length, (i0, i1) => { for (let i = i0; i < i1; i++) ckOf(cold[i]); }, { token: () => job === JOB, ms: PAINTED ? 40 : 300, at: f => { Z.workingAt(f); if (!PAINTED) window.ZH_LOAD.step(label + ' ' + Math.round(f * 100) + '%', .95 + .03 * f); } })
         .then(ok => { if (!ok || job !== JOB) return; render(); });
