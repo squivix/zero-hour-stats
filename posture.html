@@ -223,8 +223,9 @@ window.ZH_READY.then(function (Z) {
   const blockW = P => { const w = WEIGHTS[P] || []; let j = 0; return SIGNALS.map(g => g.p === P ? (w[j++] || 0) : null); };
   // a block's definition is its signals, heaviest first
   const WINDOW = D.window || 240;
+  const MARK = D.mark || 20000, mlabel = m => `$${Math.round(m / 1000)}k`;   // tempo: the dollars a seat's "mk" clock counts to
   const wlabel = w => `${Math.floor(w / 60)}:${String(w % 60).padStart(2, '0')}`;
-  const COLOURS = [['faction', 'Faction'], ['side', 'Side'], ['result', 'Result'], ['lean', 'Leaning'], ['spend', 'Spent'], ['fastwin', 'Time won'], ['oppatt', 'Opp. attacks'], ['elo', 'ELO'], ['cash', 'Cash']];
+  const COLOURS = [['faction', 'Faction'], ['side', 'Side'], ['result', 'Result'], ['lean', 'Leaning'], ['spend', 'Spent'], ['tempo', 'Tempo'], ['fastwin', 'Time won'], ['oppatt', 'Opp. attacks'], ['elo', 'ELO'], ['cash', 'Cash']];
   const MARKS = [['none', 'None'], ['map', 'Maps'], ['matchup', 'Matchups'], ['faction', 'Factions']];
   const CLUSTER_COLORS = ['#5a93d9', '#e2603f', '#d8b23a', '#4fb08a', '#b57bd6', '#e08bb0', '#8fa3b8', '#c98a3a'];
   const DEFAULT = { marks: 'none', mkn: 15, mkpin: [], mun: 15, mupin: [], dots: true, colour: 'faction', colour2: 'faction', ghost: true, rel: 'f', fm: 'a', fs: 'own', fsc: { a: 2, sh: 20 }, hid: { 1: [], 2: [] }, post: { A: null, G: null, D: null }, };
@@ -245,6 +246,7 @@ window.ZH_READY.then(function (Z) {
   const HASTRI = new Uint8Array(NSEATS);
   const SIG = new Float32Array(NSEATS * NS).fill(NaN);   // raw signal values
   const SPENT = new Float32Array(NSEATS), DL = new Float32Array(NSEATS * NL);
+  const MK = new Float32Array(NSEATS);   // tempo: seconds to the first MARK dollars spent (0: not reached in the record)
   const FW = new Float32Array(NSEATS), OA = new Int8Array(NSEATS), AN = new Int8Array(NSEATS);   // held out: minutes to the win (0 when not won), opponent attacks met, own attack sorties
   const SEAT_G = new Int32Array(NSEATS), SEAT_I = new Int8Array(NSEATS);
   const LP = LINES.map(l => 'AGDU'.indexOf(l.p));
@@ -257,7 +259,7 @@ window.ZH_READY.then(function (Z) {
         HAS[si] = 1; FAC[si] = p.f;
         let tot = 0; const by = [0, 0, 0, 0];
         for (let k = 0; k < NL; k++) { const v = p.d[k] || 0; DL[si * NL + k] = v; tot += v; by[LP[k]] += v; }
-        SPENT[si] = tot;
+        SPENT[si] = tot; MK[si] = p.mk || 0;
         for (let k = 0; k < 4; k++) SH[si * 4 + k] = tot ? by[k] / tot : 0;
         if (p.po) { HASTRI[si] = 1; for (let k = 0; k < 3; k++) { PSC.f[si * 3 + k] = p.po[k]; PSC.s[si * 3 + k] = (p.ps || p.po)[k]; PSC.a[si * 3 + k] = (p.pa || p.po)[k]; } }
         if (p.c) for (let k = 0; k < NS; k++) if (p.c[k] != null) SIG[si * NS + k] = p.c[k];
@@ -330,6 +332,7 @@ window.ZH_READY.then(function (Z) {
   }
   const RAMP = t => { t = Math.max(0, Math.min(1, t)); return t < .5 ? mix([.36, .55, .8], [.72, .72, .68], t * 2) : mix([.72, .72, .68], [.9, .38, .25], (t - .5) * 2); };   // blue - neutral - red
   const TW_LO = (() => { const v = Array.from(FW).filter(x => x > 0).sort((a, b) => a - b); return [v[Math.floor(v.length * .05)] || 0, v[Math.floor(v.length * .95)] || 1]; })();   // minutes to the win, 5th to 95th percentile of winners
+  const MK_LO = (() => { const v = Array.from(MK).filter((x, si) => HAS[si] && x > 0).sort((a, b) => a - b); return [v[Math.floor(v.length * .05)] || 0, v[Math.floor(v.length * .95)] || 1]; })();
   const SPENT_LO = (() => { const v = Array.from(SPENT).filter((x, si) => HAS[si]).sort((a, b) => a - b); return [v[Math.floor(v.length * .05)] || 0, v[Math.floor(v.length * .95)] || 1]; })();
   // the leaning: the largest score when it is over LEAN_SD - the Win rates tab's and the help page's rule (it was a
   // 10-point gap of the composition here, a different population: that put the seats high on everything in the
@@ -342,6 +345,7 @@ window.ZH_READY.then(function (Z) {
     if (mode === 'result') return WON[si] === 1 ? [.17, .83, .54] : WON[si] === 0 ? [1, .42, .24] : [.5, .5, .48, .3];
     if (mode === 'lean') { const l = lean(si); return l < 0 ? [.55, .55, .52] : PAL.post[l]; }
     if (mode === 'spend') return RAMP((SPENT[si] - SPENT_LO[0]) / Math.max(1, SPENT_LO[1] - SPENT_LO[0]));
+    if (mode === 'tempo') return MK[si] > 0 ? RAMP(1 - (MK[si] - MK_LO[0]) / Math.max(1, MK_LO[1] - MK_LO[0])) : [.5, .5, .48, .3];
     if (mode === 'fastwin') return FW[si] > 0 ? RAMP(1 - (FW[si] - TW_LO[0]) / Math.max(.1, TW_LO[1] - TW_LO[0])) : WON[si] === 0 ? [.5, .5, .48, .3] : [.5, .5, .48, .2];
     if (mode === 'oppatt') return RAMP(Math.min(OA[si], 4) / 4);
     if (mode === 'elo') { const p = D.games[SEAT_G[si]].p[SEAT_I[si]]; return p.ei == null || p.ei < 0 ? [.5, .5, .5] : RAMP(p.ei / (ELO.length - 1)); }
@@ -356,6 +360,7 @@ window.ZH_READY.then(function (Z) {
     if (mode === 'lean') { const l = lean(si); return l < 0 ? 'bal' : POST[l][0]; }
     if (mode === 'mix') return HASTRI[si] ? null : 'unscored';
     if (mode === 'fastwin') return FW[si] > 0 ? null : 'nowin';
+    if (mode === 'tempo') return MK[si] > 0 ? null : 'nomark';
     if (mode === 'elo') { const p = D.games[SEAT_G[si]].p[SEAT_I[si]]; return p.ei == null || p.ei < 0 ? 'unrated' : null; }
     if (mode === 'cash') { const g = D.games[SEAT_G[si]]; const i = Z.CASH.findIndex(([v]) => v === g.c); return i < 0 ? 'other' : String(i); }
     return null;
@@ -402,7 +407,7 @@ window.ZH_READY.then(function (Z) {
     return `<b>${name(p)}</b> <span class="d">${fac(p)} vs ${fac(opp)} ${opp ? name(opp) : ''}</span>
       ${HASTRI[si] ? `<div class="agd">${POST.map((P, k) => `<span style="--c:var(${P[2]})">${P[1]} <b>${sd(scoreOf(si, k))}</b></span>`).join('')}</div><div class="d">SD within the ${relWord()} \u00b7 ${sigWords(si)}</div>` : '<div class="d">not scored</div>'}
       <div class="d">budget: ${ALL4.map((P, k) => `<span style="color:var(${P[2]})">${P[1].toLowerCase()} ${pts(SH[si * 4 + k])}</span>`).join(' \u00b7 ')}</div>
-      <div class="d">${fmtMoney(SPENT[si])} spent by ${wlabel(WINDOW)} \u00b7 ${g.mp != null ? esc(D.maps[g.mp].n) : 'unknown map'} \u00b7 ${g.c != null ? Z.fmtCash(g.c) : '?'} \u00b7 ${g.t != null ? Math.round(g.t) + ' min' : 'untimed'} \u00b7 ${WON[si] === 1 ? 'won' : WON[si] === 0 ? 'lost' : 'no result'}${p.e != null ? ` \u00b7 ${Math.round(p.e)} ELO` : ''}${p.cs != null ? ` \u00b7 CC sold ${clock(p.cs)}` : ''}${p.we != null ? ` \u00b7 scored to ${clock(p.we)} (game over)` : ''}</div>`;
+      <div class="d">${fmtMoney(SPENT[si])} spent by ${wlabel(WINDOW)}${MK[si] > 0 ? ` \u00b7 ${mlabel(MARK)} by ${clock(Math.round(MK[si]))}` : ''} \u00b7 ${g.mp != null ? esc(D.maps[g.mp].n) : 'unknown map'} \u00b7 ${g.c != null ? Z.fmtCash(g.c) : '?'} \u00b7 ${g.t != null ? Math.round(g.t) + ' min' : 'untimed'} \u00b7 ${WON[si] === 1 ? 'won' : WON[si] === 0 ? 'lost' : 'no result'}${p.e != null ? ` \u00b7 ${Math.round(p.e)} ELO` : ''}${p.cs != null ? ` \u00b7 CC sold ${clock(p.cs)}` : ''}${p.we != null ? ` \u00b7 scored to ${clock(p.we)} (game over)` : ''}</div>`;
   }
 
   // --- the point cloud (WebGL, no library) --------------------------------
@@ -738,7 +743,7 @@ window.ZH_READY.then(function (Z) {
   const PY = new Float32Array(NSEATS * 3), HASY = new Uint8Array(NSEATS);
   { let si = 0; for (const g of D.games) for (const p of g.p) { if (p.y) { HASY[si] = 1; for (let k = 0; k < 3; k++) PY[si * 3 + k] = p.y[k]; } si++; } }
   const PROJ = D.proj || null;
-  const COLOURS2 = [['faction', 'Faction'], ['side', 'Side'], ['mix', 'Posture mix'], ['result', 'Result'], ['spend', 'Spent'], ['elo', 'ELO']];
+  const COLOURS2 = [['faction', 'Faction'], ['side', 'Side'], ['mix', 'Posture mix'], ['result', 'Result'], ['spend', 'Spent'], ['tempo', 'Tempo'], ['elo', 'ELO']];
   const cloud2 = makeCloud($('space2'), $('gl2'), $('space2-note'), si => S.colour2 === 'mix' ? mixColor(si) : seatColor(si, S.colour2), si => isHidden(2, si, S.colour2));
   cloud2.has = si => HASY[si] === 1;
   cloud2.box = false;
@@ -982,6 +987,7 @@ window.ZH_READY.then(function (Z) {
     if (mode === 'lean') return POST.map(P => sw(`var(${P[2]})`, P[1], P[0])).join('') + sw('#8c8c88', UNSCORED[n] ? 'passive or not scored' : 'passive', 'bal');
     if (mode === 'mix') return POST.map(P => sw(`var(${P[2]})`, P[1])).join('') + (UNSCORED[n] ? sw(rgb(PAL.neutral), 'not scored', 'unscored') : '') + '<span>(hues blend by the composition of the scores)</span>';
     if (mode === 'spend') return `<span>${fmtMoney(SPENT_LO[0])}<span class="grad" style="background:linear-gradient(90deg,${rgb(RAMP(0))},${rgb(RAMP(.5))},${rgb(RAMP(1))})"></span>${fmtMoney(SPENT_LO[1])} spent by ${wlabel(WINDOW)}</span>`;
+    if (mode === 'tempo') return `<span>${mlabel(MARK)} at ${clock(Math.round(MK_LO[1]))}<span class="grad" style="background:linear-gradient(90deg,${rgb(RAMP(0))},${rgb(RAMP(.5))},${rgb(RAMP(1))})"></span>at ${clock(Math.round(MK_LO[0]))}</span>` + sw('#7f7f7a', 'mark not reached (faint)', 'nomark');
     if (mode === 'fastwin') return `<span>won at ${mmss(TW_LO[0])}<span class="grad" style="background:linear-gradient(90deg,${rgb(RAMP(1))},${rgb(RAMP(.5))},${rgb(RAMP(0))})"></span>won at ${mmss(TW_LO[1])}</span>` + sw('#7f7f7a', 'lost or no result (faint)', 'nowin');
     if (mode === 'oppatt') return `<span>0<span class="grad" style="background:linear-gradient(90deg,${rgb(RAMP(0))},${rgb(RAMP(.5))},${rgb(RAMP(1))})"></span>4+ opponent attack sorties met by ${wlabel(WINDOW)}</span>`;
     if (mode === 'elo') return `<span>${ELO[0][1]}<span class="grad" style="background:linear-gradient(90deg,${rgb(RAMP(0))},${rgb(RAMP(.5))},${rgb(RAMP(1))})"></span>${ELO[ELO.length - 1][1]}</span>` + sw('#888', 'unrated', 'unrated');
@@ -1055,3 +1061,4 @@ window.ZH_READY.then(function (Z) {
   if (v) v.innerHTML = '<div class="disp">ZERO HOUR <span>STATS</span></div><div class="msg">the dataset did not load: ' + String(err).replace(/[<&]/g, ' ') + '<br>run <code>./stats posture</code> and republish</div>';
 });
 </script>
+

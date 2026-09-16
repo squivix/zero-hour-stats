@@ -269,7 +269,7 @@
         <div class="ctl"><div class="seg" id="descmode"></div></div>
       </div>
       <div class="card-h parts-row"><div class="ctl"><span class="lbl">By</span><div class="seg" id="by"></div></div><div class="spacer"></div><div class="ctl"><span class="lbl">Describe by</span><div class="parts" id="parts"></div></div></div>
-      <div id="bohint" hidden><span class="hint">Across matchups a build carries its faction&rsquo;s own strength &mdash; pick one <b>Faction Played</b> and one <b>Against</b> to compare builds on level ground.</span></div>
+      <div id="bohint" hidden><span class="hint">A build carries the strength of its faction and of its starting cash &mdash; pick one <b>Faction Played</b>, one <b>Against</b> and one <b>Starting cash</b> to compare builds on level ground.</span></div>
       <div id="desc"></div>
       <div class="foot"><span id="desc-note"></span><a class="how" href="plays.html">how plays are detected and named &rarr;</a></div>
     </section>
@@ -385,7 +385,7 @@ window.ZH_READY.then(function (Z) {
   // the plays' naming, the structure items and their counted wording live in plays.js, shared with the Win rates tab (2026-09-14)
   const PL = window.ZH_PLAYS(Z);
   const { soAt, soNext, SC, UPGS, FAMILIES, TARGET, targetOf, CRUSHES, SHORT_UNIT, rawName, mergedName, unitName, LOAD_ORDER, loadRank, loadName, FIXED, HUMVEE_BALL, LONE, ARMY,
-    cnt, isVehicle, playName, SH, struck, struckName, KEEP_FAM, movesOf, moveName, moveKey, moveHow, plurals, counted, SAME, same, itemOfT } = PL;
+    cnt, isVehicle, playName, SH, struck, struckName, KEEP_FAM, movesOf, moveName, moveKey, moveHow, plurals, counted, rawsOf, SAME, same, itemOfT } = PL;
   const NAMES = D.bo_names || [], KINDS = D.bo_kinds || [];
   const K = Object.fromEntries(KINDS.map((k, i) => [k, i]));
   // the description itself lives in builds.js, shared with the Win rates tab (2026-09-16): the page hands it its
@@ -459,7 +459,8 @@ window.ZH_READY.then(function (Z) {
     if (it && PL.ITEM.get(it.key) === it) return it;   // still the live item (a Naming switch empties ITEM)
     const nm = NAMES[idx], key = nm.k + ':' + nm.n;   // merged on the display name, so the three capture orders are one item
     it = PL.ITEM.get(key);
-    if (!it) { it = { key, n: nm.n, raw: nm.raw, c: KIND_COLOR[nm.k], kind: nm.k }; PL.ITEM.set(key, it); }
+    if (!it) { it = { key, n: nm.n, raw: nm.raw, raws: [], c: KIND_COLOR[nm.k], kind: nm.k }; PL.ITEM.set(key, it); }
+    if (!it.raws.includes(nm.raw)) it.raws.push(nm.raw);   // the orders merged into the item, for its tooltip
     ITEM_N[idx] = it;
     return it;
   };
@@ -967,7 +968,7 @@ window.ZH_READY.then(function (Z) {
     for (let j = 0; j < its.length;) {
       let e = j; while (e + 1 < its.length && its[e + 1].key === its[j].key) e++;
       const it = its[j], n = e - j + 1;
-      out.push(`${out.length ? '<span class="arrow">\u203a</span>' : ''}<span class="it" style="--c:${it.c}" title="${esc(it.raw || it.n)}"><i></i>${esc(it.n)}${n > 1 ? ` \u00d7${n}` : ''}${meds && meds[e] != null ? `<small>${fmtT(meds[e])}</small>` : ''}</span>`);
+      out.push(`${out.length ? '<span class="arrow">\u203a</span>' : ''}<span class="it" style="--c:${it.c}" title="${esc(rawsOf(it))}"><i></i>${esc(it.n)}${n > 1 ? ` \u00d7${n}` : ''}${meds && meds[e] != null ? `<small>${fmtT(meds[e])}</small>` : ''}</span>`);
       j = e + 1;
     }
     return out.join('') + (extra || '');
@@ -1038,7 +1039,7 @@ window.ZH_READY.then(function (Z) {
     if (!n) { $('next').innerHTML = '<div class="empty">No game in the selection follows this path.</div>'; $('next-note').textContent = ''; return; }
     const max = rows[0].n / n;
     $('next').innerHTML = rows.map((r, i) => `<div class="nx${r.nw < 20 ? ' thin' : ''}" data-i="${i}" style="--c:${r.it.c}">
-      <div class="name"><i></i><span title="${esc(r.it.raw || r.it.n)}">${esc(r.it.n)}</span></div>
+      <div class="name"><i></i><span title="${esc(rawsOf(r.it))}">${esc(r.it.n)}</span></div>
       <div class="track"><div class="bar" style="width:${(r.n / n / max * 100).toFixed(2)}%"></div></div>
       <div class="t">${fmtPct(r.n / n)} <small class="d">${fmtInt(r.n)}</small></div>
       <div class="wr">${wrHtml(r.w, r.nw)}</div></div>`).join('');
@@ -1076,7 +1077,7 @@ window.ZH_READY.then(function (Z) {
     } else {
       $('timings').innerHTML = `<div class="axis"><div></div><div class="ticks">${ticks.map(t => `<span style="left:${pct(t)}">${fmtT(t)}</span>`).join('')}</div><div></div></div>` +
         rows.map((r, i) => `<div class="tm" data-i="${i}" style="--c:${r.it.c}">
-          <div class="name"><i></i><span title="${esc(r.it.raw || r.it.n)}">${esc(r.it.n)}</span></div>
+          <div class="name"><i></i><span title="${esc(rawsOf(r.it))}">${esc(r.it.n)}</span></div>
           <div class="lane">${ticks.map(t => `<div class="tick" style="left:${pct(t)}"></div>`).join('')}<div class="band" style="left:${pct(r.q[0])};width:${pct(Math.max(0, r.q[2] - r.q[0]))}"></div><div class="med" style="left:${pct(r.q[1])}"></div></div>
           <div class="v">${fmtT(r.q[1])}<small>${fmtPct(r.t.length / N)} have it</small></div></div>`).join('');
       Z.tips($('timings'), '.tm', el => { const r = rows[+el.dataset.i]; return `<b>${esc(r.it.n)}</b> <span class="d">\u00b7 ${['first', 'second', 'third'][inst - 1]} one</span><table><tr><th></th><th>Clock</th></tr><tr><th class="l">25%</th><td>${fmtT(r.q[0])}</td></tr><tr><th class="l">Median</th><td>${fmtT(r.q[1])}</td></tr><tr><th class="l">75%</th><td>${fmtT(r.q[2])}</td></tr></table><div class="d">${fmtInt(r.t.length)} player-games ${r.real ? 'order it' : 'place one'} inside the window</div>`; });
@@ -1742,7 +1743,7 @@ window.ZH_READY.then(function (Z) {
     if (!withBo) { $('trio').innerHTML = `<div class="empty">The order stream of these games is not in the library yet (${fmtInt(D.order_stream || 0)} of ${fmtInt(D.games.length)} games have it).</div>`; return; }
     const list = (title, m, sub) => {
       const rows = [...m.values()].sort((a, b) => b.n - a.n).slice(0, 12), max = rows.length ? rows[0].n / withBo : 0;
-      return `<div><div class="lbl">${title}</div>${rows.length ? `<div class="bars">${rows.map(r => `<div class="row" style="--c:${r.it.c}" title="${esc(r.it.raw)} \u00b7 median ${fmtT(median(r.t))}">
+      return `<div><div class="lbl">${title}</div>${rows.length ? `<div class="bars">${rows.map(r => `<div class="row" style="--c:${r.it.c}" title="${esc(rawsOf(r.it))} \u00b7 median ${fmtT(median(r.t))}">
         <div class="name"><i></i><span>${esc(r.it.n)}</span></div><div class="track"><div class="bar" style="width:${(r.n / withBo / max * 100).toFixed(2)}%"></div></div>
         <div class="val">${fmtPct(r.n / withBo)}<small>${fmtT(median(r.t))}</small></div></div>`).join('')}</div>` : '<div class="empty">none</div>'}<div class="sub">${sub}</div></div>`;
     };
@@ -1844,8 +1845,8 @@ window.ZH_READY.then(function (Z) {
   const PASS_MIN = 6000;   // seats to describe in one block rather than in slices (~50 ms)
   let JOB = 0, PAINTED = false;
   function render() {
-    // one matchup: a faction played against one faction (or its mirror), or 1v1 finders each naming one faction (as the Win rates tab's card)
-    $('bohint').hidden = (F.facs.length === 1 && (F.opp.length === 1 || F.mirror)) || (F.who.length === 2 && F.who.every(w => w.f.length === 1));
+    // one matchup (a faction played against one faction or its mirror, or 1v1 finders each naming one faction) at one starting cash (as the Win rates tab's card)
+    $('bohint').hidden = ((F.facs.length === 1 && (F.opp.length === 1 || F.mirror)) || (F.who.length === 2 && F.who.every(w => w.f.length === 1))) && F.cash.length === 1;
     const job = ++JOB;
     Z.renderActive(); renderControls();
     const all = allPeek();

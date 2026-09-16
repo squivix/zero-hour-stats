@@ -160,13 +160,15 @@ window.ZH_PLAYS = function (Z) {
     let it = ITEM_T[ti]; if (it) return it;
     const t = D.templates[ti], key = same(Z.keyOf(t));
     it = ITEM.get(key);
-    if (!it) { it = { key, n: same(F.merge === 'all' ? t.n : F.merge === 'none' ? t.raw : t.m), raw: t.raw, c: CLS_COLOR[t.cls], kind: t.cls, r: t.r || '', cost: t.cost }; ITEM.set(key, it); }
+    if (!it) { it = { key, n: same(F.merge === 'all' ? t.n : F.merge === 'none' ? t.raw : t.m), raw: t.raw, raws: [], c: CLS_COLOR[t.cls], kind: t.cls, r: t.r || '', cost: t.cost }; ITEM.set(key, it); }
+    if (!it.raws.includes(t.raw)) it.raws.push(t.raw);   // every template the naming merged into the item, for its tooltip (once per template: ITEM_T caches the item)
     return ITEM_T[ti] = it;
   };
   // a counted structure: "2 War Factories", "3 Barracks" (the user, 2026-09-14: not "2 War Factory" next to "2 supplies");
   // a raw template name (the Naming switch) is a code name and stays as it is
   const PLURAL = new Map();   // name -> its plural: five regex tests per call, and describe() calls it per structure per seat
   const plurals = name => { let p = PLURAL.get(name); if (p === undefined) { p = /bus$/i.test(name) ? name + 'es' : /s$/i.test(name) ? name : /[^aeiou]y$/i.test(name) ? name.slice(0, -1) + 'ies' : /(x|z|ch|sh)$/i.test(name) ? name + 'es' : /\d$/.test(name) ? name : name + 's'; PLURAL.set(name, p); } return p; };
+  const rawsOf = it => it.raws && it.raws.length ? [...it.raws].sort().join(' \u00b7 ') : it.raw || it.n;   // a tooltip's template names: all that the naming merged into the item
   const counted = (n, it) => n > 1 ? (it._cn || (it._cn = []))[n] || (it._cn[n] = `${n} ${it.raw === it.n ? it.n : plurals(it.n)}`) : it.n;   // the wording kept on the item (items are made anew per naming)
 
   // the naming changes the keys and the plays' words: a store of caches per naming (sameKey), switched by reset() -
@@ -182,5 +184,5 @@ window.ZH_PLAYS = function (Z) {
   };
   reset();
   return { soAt, soNext, SC, UPGS, FAMILIES, TARGET, targetOf, CRUSHES, SHORT_UNIT, rawName, mergedName, unitName, LOAD_ORDER, loadRank, loadName, FIXED, HUMVEE_BALL, LONE, ARMY,
-    cnt, isVehicle, playName, get NAMED() { return NAMED; }, SH, struck, struckName, KEEP_FAM, movesOf, moveName, moveKey, moveHow, plurals, counted, SAME, sameOn, sameKey, same, get ITEM() { return ITEM; }, get SID() { return SID; }, itemOfT, reset };
+    cnt, isVehicle, playName, get NAMED() { return NAMED; }, SH, struck, struckName, KEEP_FAM, movesOf, moveName, moveKey, moveHow, plurals, counted, rawsOf, SAME, sameOn, sameKey, same, get ITEM() { return ITEM; }, get SID() { return SID; }, itemOfT, reset };
 };

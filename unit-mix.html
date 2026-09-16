@@ -4,6 +4,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="common.css">
 <style>
+  .more-row { display: flex; gap: 8px; justify-content: center; padding: 8px 0 2px; }   /* under the table or bars: 20 more rows a click */
+  #chart.more { overflow-y: auto; padding-right: 4px; }   /* past the first page the list keeps its height and scrolls (the user, 2026-09-16: not the whole page) */
+  #chart.more thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
   /* mix over time: a line per unit or class, a point per bin, a seat-count strip under them */
   .tl svg { display: block; width: 100%; height: auto; overflow: visible; }
   .tl svg.zoomable { cursor: grab; touch-action: none; }
@@ -113,6 +116,7 @@ window.ZH_READY.then(function (Z) {
   ];
   const DEFAULT = { view: 'units', metric: 'share', top: 30, table: false, tgroup: 'units', tbin: '30', tmetric: 'share', tstyle: 'area', tmarks: '1', thide: [] };
   const S = Z.loadPage('zh-units-page', 2, DEFAULT);
+  const MORE = 20, BASE = 40; let LAST_TOTAL = 0, CHART_H = 0;   // BASE = the longest list drawn at full height; CHART_H = that height, kept while the list scrolls   // the show-more step, and the row count of the last draw (to open the whole list on the last step)
 
   // --- aggregation -------------------------------------------------------
   function aggregate(filterPop) {
@@ -127,6 +131,9 @@ window.ZH_READY.then(function (Z) {
     const unitsView = S.view === 'units', clsOn = new Uint8Array(NC);
     for (const c of F.classes) clsOn[Z.CLS_INDEX[c]] = 1;
     const showCap = Z.showCaptured(), mergeAll = F.merge === 'all';
+    // selected seats by faction id: a row's per game and % of games count only the seats whose faction can queue
+    // it (a Worker per USA seat is 0 by construction; "10 workers per game" read as 30 to a GLA player, 2026-09-16)
+    const facSeats = new Float64Array(32);
     const NT = D.templates.length, slot = new Array(NT * 2).fill(null);   // template (+NT when captured) -> its row: the string key is built once per template
     let si = 0;
     for (const g of D.games) {
@@ -135,7 +142,7 @@ window.ZH_READY.then(function (Z) {
       for (let i = 0; i < g.p.length; i++) {
         const m = M[si++], p = g.p[i];
         if (filterPop ? (m & Z.M_ALL) !== Z.M_ALL : !(base && (m & Z.M_SEAT))) continue;
-        games++;
+        games++; facSeats[p.f]++;
         if (p.e != null) elos[ne++] = p.e;
         const list = unitsView ? p.u : p.b;
         let myUnits = 0, mySpend = 0;
@@ -152,11 +159,12 @@ window.ZH_READY.then(function (Z) {
           if (!u) {
             const k = captured ? Z.keyOf(t) + '\u0000captured' : Z.keyOf(t);
             u = units.get(k);
-            if (!u) { u = { key: k, n: (mergeAll ? t.n : t.m) + (captured ? ' (captured)' : ''), raw: t.raw, cls: unitsView ? t.cls : 'structure', cost: t.cost, count: 0, present: 0, spend: 0, sides: 0, captured, last: -1 }; units.set(k, u); }
+            if (!u) { u = { key: k, n: (mergeAll ? t.n : t.m) + (captured ? ' (captured)' : ''), raw: t.raw, cls: unitsView ? t.cls : 'structure', cost: t.cost, count: 0, present: 0, spend: 0, sides: 0, elig: 0, raws: [], captured, last: -1 }; units.set(k, u); }
+            if (!u.raws.includes(t.raw)) u.raws.push(t.raw);   // every template the naming merged into the row, for its tooltip (the user, 2026-09-16)
             slot[sidx] = u;
           }
           const sp = n * t.cost;
-          u.count += n; u.spend += sp; u.sides |= t.sb;
+          u.count += n; u.spend += sp; u.sides |= t.sb; u.elig |= captured ? ~t.own : t.own;   // elig = a bit per faction whose seats the row is measured over
           if (u.last !== games) { u.last = games; u.present++; }   // once per player-game
           total += n; spend += sp; myUnits += n; mySpend += sp;
           byClsA[ci] += n; spendClsA[ci] += sp;
@@ -166,13 +174,15 @@ window.ZH_READY.then(function (Z) {
       if (games > g0) ngames++;
     }
     const G = games, T = total, SP = spend;
-    const rows = [...units.values()].map(u => ({
-      ...u,
+    const seatsOf = elig => { let n = 0; for (let f = 0; f < 32; f++) if ((elig >>> f) & 1) n += facSeats[f]; return n; };
+    const rows = [...units.values()].map(u => { const seats = seatsOf(u.elig); return {
+      ...u, seats,
       share: T ? u.count / T : 0,
-      pergame: G ? u.count / G : 0,
-      games: G ? u.present / G : 0,
+      pergame: seats ? u.count / seats : 0,
+      games: seats ? u.present / seats : 0,
       spend: SP ? u.spend / SP : 0,
-    }));
+      spendPer: seats ? u.spend / seats : 0,
+    }; });
     const byCls = {}, spendCls = {};
     CLASSES.forEach((c, i) => { byCls[c[0]] = byClsA[i]; spendCls[c[0]] = spendClsA[i]; });
     byCls.structure = byClsA[NC - 1]; spendCls.structure = spendClsA[NC - 1];
@@ -204,7 +214,7 @@ window.ZH_READY.then(function (Z) {
           ${row('ELO', sel.elos.n ? fmtInt(sel.elos.median) : dash, sel.elos.n ? fmtInt(Math.round(sel.elos.mean)) : dash)}
         </table></div>
       <div class="tile"><div class="lbl">Most built</div><div class="v">${top ? esc(top.n) : dash}</div><div class="d">${top ? fmtPct(top.share) + ' of ' + thing + ', in ' + fmtPct(top.games) + ' of games' : 'no games match'}</div></div>
-      <div class="tile"><div class="lbl">Most spent on</div><div class="v">${rich ? esc(rich.n) : dash}</div><div class="d">${rich ? fmtPct(rich.spend) + ' of spend, ' + fmtMoney(rich.spend * sel.spendTotal / (n || 1)) + ' per game' : 'no games match'}</div></div>`;
+      <div class="tile"><div class="lbl">Most spent on</div><div class="v">${rich ? esc(rich.n) : dash}</div><div class="d">${rich ? fmtPct(rich.spend) + ' of spend, ' + fmtMoney(rich.spendPer) + ' per game' : 'no games match'}</div></div>`;
   }
 
   function renderChart(sel, all) {
@@ -227,25 +237,32 @@ window.ZH_READY.then(function (Z) {
         const w = max ? (r[S.metric] / max * 100) : 0;
         const bw = b && max ? (b[S.metric] / max * 100) : null;
         return `<div class="row" data-i="${i}">
-          <div class="name"><i style="--c:${CLS_COLOR[r.cls]}"></i><span title="${esc(r.raw)}">${esc(r.n)}</span></div>
+          <div class="name"><i style="--c:${CLS_COLOR[r.cls]}"></i><span title="${esc([...r.raws].sort().join(' \u00b7 '))}">${esc(r.n)}</span></div>
           <div class="track"><div class="bar" style="--c:${CLS_COLOR[r.cls]};width:${w.toFixed(2)}%"></div>${bw == null ? '' : `<div class="base" style="left:${bw.toFixed(2)}%"></div>`}</div>
           <div class="val">${fmt(r[S.metric])}${S.metric === 'share' || S.metric === 'spend' ? `<small>${fmtInt(r.count)}</small>` : ''}</div>
         </div>`; }).join('')}</div>`;
       Z.tips($('chart'), '.row', el => { const r = rows[+el.dataset.i]; return tipHtml(r, baseByKey.get(r.key)); });
     }
+    // a "show more" under the list: 20 more a click, the last click opening the whole list (the user, 2026-09-16)
+    LAST_TOTAL = sel.rows.length;
+    // the pane keeps the height of its first page: measured on a draw at or under the base cap, held past it
+    const el = $('chart');
+    if (rows.length <= BASE) { el.classList.remove('more'); el.style.maxHeight = ''; CHART_H = el.offsetHeight; }
+    else { el.classList.add('more'); el.style.maxHeight = `min(${CHART_H || 900}px, 80vh)`; }   // and never taller than the window
+    if (sel.rows.length > rows.length) $('chart').insertAdjacentHTML('beforeend', `<div class="more-row"><button class="chip" data-more="1">Show ${Math.min(MORE, sel.rows.length - rows.length)} more</button></div>`);
     const shown = Math.min(rows.length, sel.rows.length);
-    $('foot-note').textContent = `${shown} of ${sel.rows.length} ${S.view === 'units' ? 'unit' : 'structure'} types shown \u00b7 sorted by ${metric[1].toLowerCase()} \u00b7 counts are units that came out of production (structures: placed), from the pack`;
+    $('foot-note').textContent = `${shown} of ${sel.rows.length} ${S.view === 'units' ? 'unit' : 'structure'} types shown \u00b7 sorted by ${metric[1].toLowerCase()} \u00b7 counts are units that came out of production (structures: placed), from the pack \u00b7 per game and % of games are over the games of factions that can build it`;
   }
 
-  const sidesOf = bits => { let n = 0; for (let b = bits; b; b >>= 1) n += b & 1; return n; };
   function tipHtml(r, b) {
     const row = (l, v, bv) => `<tr><th class="l">${l}</th><td>${v}</td><td class="d">${bv}</td></tr>`;
-    return `<b>${esc(r.n)}</b> <span class="d">\u00b7 ${r.cls}${r.cost ? ' \u00b7 ' + fmtMoney(r.cost) : ''}</span><div class="raw">${esc(r.raw)}${sidesOf(r.sides) > 1 ? ' (+' + (sidesOf(r.sides) - 1) + ' variants)' : ''}</div>
+    return `<b>${esc(r.n)}</b> <span class="d">\u00b7 ${r.cls}${r.cost ? ' \u00b7 ' + fmtMoney(r.cost) : ''}</span><div class="raw">${esc([...r.raws].sort().join(' \u00b7 '))}</div>
       <table><tr><th></th><th>Selection</th><th>Corpus</th></tr>
       ${row('built', fmtInt(r.count), b ? fmtInt(b.count) : '\u2014')}
       ${row('share', fmtPct(r.share), b ? fmtPct(b.share) : '\u2014')}
       ${row('per game', r.pergame.toFixed(2), b ? b.pergame.toFixed(2) : '\u2014')}
       ${row('% of games', fmtPct(r.games), b ? fmtPct(b.games) : '\u2014')}
+      ${row('games that could build it', fmtInt(r.seats), b ? fmtInt(b.seats) : '\u2014')}
       ${row('share of spend', fmtPct(r.spend), b ? fmtPct(b.spend) : '\u2014')}</table>`;
   }
 
@@ -666,6 +683,7 @@ window.ZH_READY.then(function (Z) {
     }
     if (d.metric) S.metric = d.metric;
     else if (d.top != null) S.top = +d.top;
+    else if (d.more) S.top = S.top + MORE >= LAST_TOTAL ? 0 : S.top + MORE;
     else if (d.view) { if (d.view === 'table') S.table = true; else { S.table = false; S.view = d.view; } }
     else return false;
     return true;

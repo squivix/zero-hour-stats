@@ -394,6 +394,7 @@ window.ZH_READY.then(function (Z) {
   // against 49-57 for the leanings), not the ones high on everything (the user, 2026-09-15)
   const LEAN_LABELS = ['Aggressive', 'Greedy', 'Defensive', 'Passive'];
   const leanOf = po => { if (!po) return -1; let b = 3, m = .5; for (let i = 0; i < 3; i++) if (po[i] > m) { m = po[i]; b = i; } return b; };
+  const MARK = D.mark || 20000, mlabel = m => `$${Math.round(m / 1000)}k`;   // tempo: the dollars a seat's "mk" clock counts to
   const READS = [
     // the plays
     ['play', 'clock', 'first', 'First play', 'play', (p, g, by) => { const m = playsBy(p, by); return playId(m.length ? m[0].name : 'none'); }],
@@ -413,6 +414,7 @@ window.ZH_READY.then(function (Z) {
     ['open', 'D', 'def', 'Defences at home', cntNum(3), (p, g, by) => kindCount(p, K_DEF, by, 50)],
     ['open', 'army', 'prod', 'Production buildings', cntNum(4), (p, g, by) => kindCount(p, K_PROD, by)],
     ['open', 'army', 'spend', 'Army spend', num('money', [1000, 2000, 3000, 4500], { zero: '$0' }), (p, g, by) => army(p, by).sum],
+    ['open', 'tempo', 'mark', `Time to ${mlabel(MARK)}`, num('time', [150, 180, 210, 240], { none: 'not reached' }), p => p.mk != null ? p.mk : -1],   // tempo: shown, never scored
     // the eco
     ['eco', 'clock', 'sup', 'Supplies', cntNum(4), (p, g, by) => kindCount(p, K_SUP, by)],
     ['eco', 'clock', 'sup2', 'Second supply placed', num('time', [60, 90, 120, 180], { none: 'not by 5:00' }), p => nthKind(p, K_SUP, 2)],
@@ -441,7 +443,7 @@ window.ZH_READY.then(function (Z) {
     ['umix', 'game', 'airG', 'Any aircraft, whole game', ['none', 'some'], p => armyGame(p).c[2] ? 1 : 0],
     ['umix', 'game', 'kindsG', 'Unit kinds, whole game', num('count', [4, 6, 8, 10]), p => armyGame(p).kinds],
   ];
-  const PANE = { open: { el: 'open', note: 'open-note', by: 'oby', ord: 'oord', groups: { lean: '', A: 'Aggression', G: 'Greed', D: 'Defence', army: 'Army' } },
+  const PANE = { open: { el: 'open', note: 'open-note', by: 'oby', ord: 'oord', groups: { lean: '', A: 'Aggression', G: 'Greed', D: 'Defence', army: 'Army', tempo: 'Tempo' } },
     eco: { el: 'eco', note: 'eco-note', by: 'eby', ord: 'eord', groups: { clock: 'By the clock', game: 'Whole game' } },
     umix: { el: 'umix', note: 'umix-note', by: 'uby', ord: 'uord', groups: { clock: 'By the clock', game: 'Whole game' } },
     play: { el: 'play', note: 'play-note', by: 'pby', ord: 'pord', all: 'pall', groups: { clock: '' } } };   // all: the Show control (top 12 / every one, scrolling)

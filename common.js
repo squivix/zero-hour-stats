@@ -427,14 +427,30 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   D.templates.forEach(t => { if (t.n) t.n = t.n.replace(/^Tunnel Defender$/, 'RPG Trooper'); if (t.m) t.m = t.m.replace(/^Tunnel Defender$/, 'RPG Trooper'); });
   // Boss general and Generals Challenge (GC_) tech only exists on a few challenge-style maps: the pages leave those orders out
   D.templates.forEach(t => { t.challenge = /^(Boss_|GC_)/.test(t.raw); });
+  // the Technical's three chassis are what the engine spawns for a GLAVehicleTechnical order: t.base = the name the
+  // build menus (buildable.json) know it by, and, for an export before 2026-09-17 (the table gives ChassisTwo/Three
+  // no side, class or cost), the base's side, class and cost (the user, 2026-09-17: Technicals were missing from the unit mix)
+  const BY_RAW = new Map(D.templates.map(t => [t.raw, t]));
+  D.templates.forEach(t => { t.base = t.raw.replace(/^(.*VehicleTechnical)Chassis(One|Two|Three)$/, '$1'); });
+  D.templates.forEach(t => {
+    if (t.base === t.raw) return;
+    const b = BY_RAW.get(t.base) || D.templates.find(x => x.base === t.base && x.side !== '?');   // the base, or the one chassis the table describes
+    if (!b) return;
+    if (t.side === '?') t.side = b.side;
+    if (t.cls === 'other') { t.cls = b.cls; t.r = b.r; }
+    if (!t.cost) t.cost = b.cost || (/^Demo_/.test(t.raw) ? 600 : 500);
+  });
   // per template: t.own = a bit per faction id that can queue it, t.ci = its class index, t.sb = its side's bit,
   // so the aggregation loops (a few million runs per click) test bits instead of looking up sets and strings
   const CLS_INDEX = Object.fromEntries(CLASSES.map((c, i) => [c[0], i])); CLS_INDEX.structure = CLASSES.length;
   const SIDE_BIT = { USA: 1, China: 2, GLA: 4 };
+  // a general's Technical with no chassis of its own (Toxin, Stealth) spawns the vanilla chassis, so those seats own it too
+  const HAS_CHASSIS = new Set(D.templates.filter(t => t.base !== t.raw).map(t => t.base));
+  const ownsChassis = (names, t) => names.has(t.base) || (!/_/.test(t.base) && Object.keys(GEN_PREFIX).some(pre => names.has(pre + '_' + t.base) && !HAS_CHASSIS.has(pre + '_' + t.base)));
   D.templates.forEach(t => {
     let own = 0;
     for (const f of FACS) {
-      const ok = OWN ? !!(OWN[f.id] && OWN[f.id].has(t.raw)) : t.side === '?' || (t.side === f.side && (t.gen == null || t.gen === f.id));
+      const ok = OWN ? !!(OWN[f.id] && (OWN[f.id].has(t.raw) || (t.base !== t.raw && ownsChassis(OWN[f.id], t)))) : t.side === '?' || (t.side === f.side && (t.gen == null || t.gen === f.id));
       if (ok) own |= 1 << f.id;
     }
     t.own = own; t.ci = CLS_INDEX[t.cls] == null ? CLS_INDEX.other : CLS_INDEX[t.cls]; t.sb = SIDE_BIT[t.side] || 8;
