@@ -163,6 +163,18 @@
   .seq-rows.cols .seq, .seq-head { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; gap: 10px; }
   .seq-head { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 0 6px 2px; }
   .seq-head .r { text-align: right; }
+  .seq-head .r a, .tbl-wrap th a { color: var(--muted); text-decoration: none; margin-left: 4px; font-size: 12px; letter-spacing: 0; }
+  .seq-head .r a:hover, .tbl-wrap th a:hover { color: var(--accent); }
+  /* the builds' win rate as a bar about 50%, no number (the user, 2026-09-16): right of the centre line and green above it,
+     left and red below, 20 points fill a half; the dark whisker over it is the 95% interval */
+  /* the Win Rates tab's bar, small: a track from 50%, the 95% interval as a hairline through it */
+  .wr .wbar { display: inline-block; position: relative; width: 84px; height: 10px; vertical-align: -1px; background: var(--ground); border-radius: 2px; }
+  .wr .wbar b { position: absolute; top: 4px; height: 2px; background: var(--ink); opacity: .55; }
+  .wr .wbar b::before, .wr .wbar b::after { content: ''; position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--ink); }   /* the interval's ends */
+  .wr .wbar b::before { left: 0; } .wr .wbar b::after { right: 0; }
+  .wr .wbar::before { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line-strong); }
+  .wr .wbar i { position: absolute; top: 2px; bottom: 2px; border-radius: 2px; background: var(--win); }
+  .wr .wbar i.dn { background: var(--lose); }
   .seq .cell { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; min-width: 0; min-height: 24px; }
   .seq .cell .pg { display: contents; }
   .seq .cell .pg + .pg::before { content: ''; width: 5px; flex: none; }   /* a breath between the parts */
@@ -176,6 +188,7 @@
   .seq.thin .wr, .nx.thin .wr { color: var(--muted); }
   /* the parts of a description: toggle chips in the card header */
   .parts { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+  .parts-row { justify-content: flex-end; }   /* the clock and the parts on their own row under the title: clock left, parts right (the user, 2026-09-16) */
   .parts .chip { padding: 3px 8px; font-size: 12px; }
   .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px 32px; }
   /* the prefix picked for "what comes next" */
@@ -249,10 +262,10 @@
       <div class="card-h">
         <h2 class="disp">Build Orders <span class="clock" id="clock-1"></span></h2>
         <div class="spacer"></div>
-        <div class="ctl"><span class="lbl">By</span><div class="seg" id="by"></div></div>
-        <div class="ctl"><span class="lbl">Describe by</span><div class="parts" id="parts"></div></div>
+        <div class="ctl"><span class="lbl">Sort</span><div class="seg" id="descsort"></div></div>
         <div class="ctl"><div class="seg" id="descmode"></div></div>
       </div>
+      <div class="card-h parts-row"><div class="ctl"><span class="lbl">By</span><div class="seg" id="by"></div></div><div class="spacer"></div><div class="ctl"><span class="lbl">Describe by</span><div class="parts" id="parts"></div></div></div>
       <div id="desc"></div>
       <div class="foot"><span id="desc-note"></span><a class="how" href="plays.html">how plays are detected and named &rarr;</a></div>
     </section>
@@ -346,6 +359,10 @@
       <div class="card-h"><h2 class="disp">Promotion, Upgrades and Powers</h2><div class="spacer"></div><span class="hint">share of player-games with it inside the window, from the order stream</span></div>
       <div class="trio" id="trio"></div>
     </section>
+
+    <section class="card xref">
+      <a class="xref" href="winrates.html#card-bo">Win rates by build order &rarr;</a>
+    </section>
   </main>
 </div>
 <div id="tip" hidden></div>
@@ -356,6 +373,8 @@
 <script src="data.js"></script>
 <script src="common.js"></script>
 <script src="plays.js"></script>
+<script src="builds.js"></script>
+<script src="terrain.js"></script>
 <script>
 window.ZH_READY.then(function (Z) {
   const { D, F, CLS_COLOR, TOTAL_PG, $, esc, fmtPct, fmtInt, seg, shortName } = Z;
@@ -365,13 +384,18 @@ window.ZH_READY.then(function (Z) {
     cnt, isVehicle, playName, SH, struck, struckName, KEEP_FAM, movesOf, moveName, moveKey, moveHow, plurals, counted, SAME, same, itemOfT } = PL;
   const NAMES = D.bo_names || [], KINDS = D.bo_kinds || [];
   const K = Object.fromEntries(KINDS.map((k, i) => [k, i]));
-  const GATHERER = { USA: ['chinook', 'chinooks'], China: ['truck', 'trucks'], GLA: ['worker', 'workers'] };
-  const BUILDER = { USA: ['dozer', 'dozers'], China: ['dozer', 'dozers'], GLA: ['worker', 'workers'] };
-  // the builders of the opening: the starting dozer / worker plus every one out of the Command Center before it was
-  // sold - or, when it was kept, before BUILDER_CUT, the clock most sales are done by (95% of the library's sales by
-  // 0:56, the median at 0:37). Not the card's clock: a 3-dozer build is one at 1:00 too (the user, 2026-09-15:
-  // "2 dozer builds and 3 dozer builds are very different")
-  const BUILDER_CUT = 60, BUILDER_MAX = 10;
+  // the description itself lives in builds.js, shared with the Win rates tab (2026-09-16): the page hands it its
+  // clocks and parts, and keeps the copy card's facts (mirrorFacts) and the per-naming caches here
+  const BD = window.ZH_BUILDS(Z, PL);
+  const { GATHERER, BUILDER, BUILDER_CUT, BUILDER_MAX, PARTS, PART_NAME, HUMVEES, HUMVEES_MD, INF_WEIGHT, SPAWNED, ARMY_CLS, MIX_SHARE, MIX_MAX, TUNNEL, fwdItem, plural, NTH, cap } = BD;
+  const describe = (p, g) => { const d = BD.describe(p, g, { by: S.by, fwd: S.fwd, openN: CACHE.openN }); d.mir = mirrorFacts(p, d); return d; };
+  const describeMoves = (p, d) => BD.describeMoves(p, d, { move: S.move });
+  const PART_ON = k => S.parts.includes(k);
+  const chainEach = (d, fn) => BD.chainEach(d, PART_ON, fn);
+  const walkChain = (d, named, emit) => BD.walkChain(d, PART_ON, named, emit);
+  const sideOf = s => { const fac = D.factions[s.f]; return fac ? fac.side : ''; };
+  const chipsOf = (s, named) => BD.chipsOf(s.d, sideOf(s), PART_ON, named);
+  function chipKey(s) { const r = BD.chipKey(s.d, sideOf(s), PART_ON); s.ckt = r.t; return r.key; }
   // the bo run's event codes ("bo" runs: no units on the library)
   const EV_UNIT = 0, EV_STRUCT = 1, EV_UPGRADE = 2, EV_SCIENCE = 3, EV_SELL = 4, EV_POWER = 5, EV_CANCEL = 6;
   // one clock for the whole page - every "By" control shares S.by (the user, 2026-09-14); the seat record's
@@ -382,8 +406,7 @@ window.ZH_READY.then(function (Z) {
   const WINDOWS = [[120, '2:00'], [180, '3:00'], [240, '4:00'], [300, '5:00']];
   const DEPTHS = [4, 6, 8, 10];
   const INSTANCES = [[1, '1st'], [2, '2nd'], [3, '3rd'], [4, '4th'], [5, '5th'], [6, '6th'], [7, '7th'], [8, '8th'], [9, '9th'], [10, '10th']];
-  const PARTS = [['bld', 'Builders', '--p-bld'], ['sup', 'Supplies', '--p-sup'], ['gat', 'Gatherers', '--p-gat'], ['prod', 'Buildings', '--p-prod'], ['move', 'Plays', '--p-move'], ['units', 'Unit Mix', '--p-none']];   // Units = the state chip, the mix it had made (a part of its own - the user, 2026-09-14)
-  const DEFAULT = { by: 180, fu: 2, cls: 'infantry', move: 180, fwd: 50, parts: ['bld', 'sup', 'prod', 'move', 'units'], table: false, window: 300, k: 6, prefix: [], instance: 1, tmTable: false,
+  const DEFAULT = { by: 180, fu: 2, cls: 'infantry', move: 180, fwd: 50, parts: ['bld', 'sup', 'prod', 'move', 'units'], table: false, sort: 'games', window: 300, k: 6, prefix: [], instance: 1, tmTable: false,
     mapKinds: ['supply', 'production', 'defense'], mapT: [], mapOpen: null, mapDraw: 'heat', mapFlow: 'lines', mapGrain: 28, mapPal: 'relief', mapTint: 'grey', mapSpotR: 6, mapBlur: 12, mapSp: -1, mapBy: 180, focus: null, mapBuild: true };   // the map card: the kinds shown by default (Supply Centers, Production Buildings, Defences - the user, 2026-09-14; CC is off besides: every game puts one on the same cell at 0:00, and it hid the rest), the structures shown (empty = every one), the spawn (-1 = all)
   const S = Z.loadPage('zh-bo-page', 2, DEFAULT);
   S.fwd = DEFAULT.fwd;   // the forward line is fixed (the control went, 2026-09-14)
@@ -405,12 +428,15 @@ window.ZH_READY.then(function (Z) {
   const money = v => (v < 0 ? '\u2212$' : '$') + fmtInt(Math.abs(Math.round(v)));
   const quart = a => { const s = Float64Array.from(a); return [Z.select(s, s.length, .25), Z.select(s, s.length, .5), Z.select(s, s.length, .75)]; };
   const wrHtml = (w, n) => n ? `${fmtPct(w / n)}<small>${fmtInt(n)}</small>` : `<span class="d">\u2014</span>`;
+  // the builds card's win rate: the number and a tiny bar about 50%, no count (the user, 2026-09-16) - the count is in the row's tip
+  const wrBar = (w, n) => {
+    if (!n) return `<span class="d">\u2014</span>`;
+    const at = p => (Math.min(.2, Math.max(-.2, p - .5)) / .2 * 50 + 50), d = w / n - .5, half = Math.abs(at(w / n) - 50), [lo, hi] = Z.wilson(w, n);
+    return `<span class="wbar" title="wins ${fmtPct(w / n)} of ${fmtInt(n)} with a result (95%: ${fmtPct(lo)} to ${fmtPct(hi)})"><i class="${d < 0 ? 'dn' : ''}" style="left:${(d < 0 ? 50 - half : 50).toFixed(1)}%;width:${half.toFixed(1)}%"></i><b style="left:${at(lo).toFixed(1)}%;width:${(at(hi) - at(lo)).toFixed(1)}%"></b></span>`;
+  };
+  const WR_LINK = `<a href="${window.ZH_SUBSET ? window.ZH_SUBSET.link('winrates.html#card-bo') : 'winrates.html#card-bo'}" title="these builds on the Win Rates tab: Win Rate by Build Order">\u2197</a>`;   // on the same draw (?max=), like the nav
   // the Unit Mix chip's vees: empty and loaded read apart (the user, 2026-09-14: the mix should show the
   // difference) - "Humvees" when the vees are a main kind on their own, "Humvees (MDs)" when the MDs are one too
-  const HUMVEES = { key: 'humvees', n: 'Humvees' }, HUMVEES_MD = { key: 'humvees-md', n: 'Humvees (MDs)' };
-  const INF_WEIGHT = .5;   // infantry counts at half its cost in the mix: it is always there in numbers (the user, 2026-09-14), so it takes twice the spend to be a main kind
-  const SPAWNED = new Set(['Pilot', 'Spectre Gunship1']);   // out of a wreck or a power, not production: never a build
-  const ARMY_CLS = new Set(['infantry', 'vehicle', 'aircraft']), MIX_SHARE = .75, MIX_MAX = 3;   // the Units chip: the kinds that make three quarters of the army's cost, up to three
   const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
   const hex = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
   const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
@@ -436,9 +462,7 @@ window.ZH_READY.then(function (Z) {
   const ITEM_N = [];   // NAMES index -> its item
   const END = { key: '\u2205', n: 'nothing more', c: 'var(--muted)', kind: 'end' };
   PL.ITEM.set(END.key, END);
-  const TUNNEL = { key: 'tunnel', n: 'Tunnel', raw: 'GLATunnelNetwork', c: KIND_COLOR.tunnel || 'var(--p-prod)', kind: 'tunnel' };
   // the same structure past the forward line: its own item, "Forward Barracks" (the user, 2026-09-14: title case)
-  const fwdItem = it => { const key = 'f:' + it.key; let f = PL.ITEM.get(key); if (!f) { f = { ...it, key, n: 'Forward ' + it.n, fwd: true }; PL.ITEM.set(key, f); } return f; };
 
   // --- GLA fakes made real (the user, 2026-09-14: their timings with the structures') -----------
   // the k-th "Become Real" order on a kind of fake is timed like the k-th structure; a repeated click on the same
@@ -464,70 +488,6 @@ window.ZH_READY.then(function (Z) {
   }
 
   // --- one pass over the seats ----------------------------------------------------------------
-  // a seat: its described build (by the card's clocks), its structure sequence inside the window, the raw runs
-  // an opening group's key -> its wording (a few hundred distinct over 74k seats) lives on the naming's cache (CACHE.openN)
-  function describe(p, g) {
-    const pz = p.pz || [], by = S.by, fwdAt = S.fwd, cash = g && g.c != null ? g.c : 10000;
-    let sup = 0, supAll = 0, tun = 0, second = null, prodT = null;
-    const prod = new Map(), placed = [], supT = [];   // template key -> {it, n, t (first)}; every production placement; the supply clocks
-    // the cash rule (the user, 2026-09-13): a structure is bought with the starting cash while the sticker prices
-    // of everything placed so far, itself included, sum to no more than it (the CC and captures cost nothing; the
-    // dataset has no money series, so dozers and gatherers bought are not counted - the sum understates spending)
-    const idx = []; for (let j = 0; j < pz.length; j += 4) if (pz[j + 3] !== K.cc && pz[j + 3] !== K.captured) idx.push(j);
-    idx.sort((a, b) => pz[a + 1] - pz[b + 1]);
-    const startCash = new Set(); let spent = 0;
-    for (const j of idx) { spent += D.templates[pz[j]].cost || 0; if (spent <= cash) startCash.add(j); }
-    for (let j = 0; j < pz.length; j += 4) {
-      const t = pz[j + 1], along = pz[j + 2], kind = pz[j + 3];
-      if (t > by) continue;
-      // a structure past the forward line is a step of its own kind, "Forward Barracks", in the sequence with
-      // the rest (the user, 2026-09-14: not a part of its own); a forward tunnel too, apart from the tunnel count
-      const forward = along >= fwdAt && (kind === K.production || kind === K.tunnel || kind === K.defense);
-      if (kind === K.supply) { supAll++; supT.push([t, startCash.has(j)]); }
-      else if (kind === K.production || kind === K.defense) {   // defences sit in the sequence with production (the user, 2026-09-14: a Fire Base or 2 EMPs early is the build)
-        const it = itemOfT(pz[j]);
-        if (kind === K.production) {
-          let r = prod.get(it.key);
-          if (!r) { r = { it, n: 0, t }; prod.set(it.key, r); }
-          r.n++; if (t < r.t) r.t = t;
-          if (prodT === null || t < prodT) prodT = t;
-        }
-        placed.push({ it: forward ? fwdItem(it) : it, t, def: kind === K.defense, open: !forward && kind === K.production && startCash.has(j) });   // a defence is never in the opening group: its own chip after it (the user, 2026-09-14); nor is a forward structure
-      }
-      else if (kind === K.tunnel) { if (forward) placed.push({ it: fwdItem(TUNNEL), t, def: false, open: false }); else tun++; }
-    }
-    // the supplies of the OPENING are the ones placed before any play left; a later one is an EXPANSION - its own
-    // step in the chain, in time order with the later structures and the plays (the user, 2026-09-14: "3 supplies"
-    // was also the player who did a normal two, harassed, and then expanded to a third - "that should be captured
-    // later in the chain depending on its timing and how it compares to the raid"). Not the cash rule: a third
-    // stash at 2:15 behind four tunnels is past the starting cash on paper and is still a 3-stash build. The first
-    // play's clock is whatever the plays clock: the cut is the build's, not the card's
-    supT.sort((a, b) => a[0] - b[0]);
-    const mv0 = movesOf(p), raidT = mv0.length ? mv0[0].t : Infinity, exp = [];
-    for (const [t] of supT) { if (t < raidT) { sup++; if (sup === 2) second = t; } else exp.push({ k: sup + exp.length + 1, t }); }
-    const gt = p.gt, gi = Math.min(gt ? gt.length - 1 : 0, Math.max(0, Math.round(by / 30) - 1)), gat = gt ? gt[gi] : 0;
-    // the builders (see BUILDER_CUT): the count, and the clocks of the ones out of the CC that count, in order
-    let bld = null, bldT = null;
-    if (p.bdt) { const cut = p.cs != null ? p.cs : BUILDER_CUT; bldT = p.bdt.filter(t => t <= cut).sort((a, b) => a - b); bld = (p.bd0 || 0) + bldT.length; }
-    const byTime = [...prod.values()].sort((a, b) => a.t - b.t);
-    // the description's stages (the user, 2026-09-13): the OPENING is every production building the starting
-    // cash bought (the rule above) as an unordered group with counts ("Barracks + War Factory", "2 War Factory");
-    // every later building is a step of its own, in placement order, among the expansions and the plays - see
-    // walkChain(), which counts a run of the same one ("2 EMP Patriot")
-    placed.sort((a, b) => a.t - b.t);
-    let open = null; const opening = placed.filter(x => x.open);
-    if (opening.length) {
-      const c = new Map(); for (const x of opening) c.set(x.it, (c.get(x.it) || 0) + 1);
-      const ents = [...c.entries()].sort((a, b) => a[0].n < b[0].n ? -1 : a[0].n > b[0].n ? 1 : 0);
-      const key = 'o:' + ents.map(([it, n]) => n + 'x' + it.key).join('+');
-      let n = CACHE.openN.get(key); if (n === undefined) CACHE.openN.set(key, n = ents.map(([it, c]) => counted(c, it)).join(' + '));
-      open = { key, n, t: opening[opening.length - 1].t };
-    }
-    const steps = placed.filter(x => !x.open).map(x => ({ it: x.it, t: x.t }));
-    const d = { sup, supAll, exp, tun, second, prod: byTime, open, opening, steps, prodT, gat, bld, bldT, move: null, moves: null, state: null };
-    d.mir = mirrorFacts(p, d);
-    return d;
-  }
   // the copy card's elements for one seat, by the same clock: the production buildings and the defences placed by it
   // as sets with counts, the first k units of each class as a set, the units out of production by it - each a
   // [key, name, clock] the card tallies over the selection (deriving these per render was ~200 ms a click)
@@ -564,36 +524,6 @@ window.ZH_READY.then(function (Z) {
       fu[cls] = [ents.map(([it, n]) => n + 'x' + it.key).join('+'), ents.map(([it, n]) => counted(n, it)).join(' + '), u[u.length - 1].t];
     }
     return fu;
-  }
-  // the plays part alone (its clock changes without the rest): every play before the clock, in crossing order -
-  // "2 supplies, 2 WFs, truck rush, then what?" (the user, 2026-09-13); no cap, the chips carry them
-  function describeMoves(p, d) {
-    const moves = movesOf(p).filter(m => m.t <= S.move);
-    d.moves = moves; d.move = moves[0] || null;
-    // then the state - the army's mix by the clock, summarized (the user, 2026-09-14: "a more general summary of
-    // the unit mix the player has been going for", where every kind it had made was one build per set): the
-    // kinds that make up three quarters of what it spent on army units, largest share first - a fourth needed
-    // reads "mixed". Gatherers, builders and the spawned ones (a pilot is not a build) are not army.
-    d.state = null;
-    if (p.ul) {
-      const cost = new Map(), rawOf = new Map(); let total = 0;
-      for (let j = 0; j < p.ul.length; j += 2) {
-        if (p.ul[j + 1] > S.move) continue;
-        const t = D.templates[p.ul[j]]; if (!ARMY_CLS.has(t.cls) || !t.cost) continue;
-        const raw = rawName(p.ul[j]); if (SPAWNED.has(raw)) continue;
-        const it = itemOfT(p.ul[j]), w = t.cls === 'infantry' ? t.cost * INF_WEIGHT : t.cost;
-        cost.set(it, (cost.get(it) || 0) + w); total += w; rawOf.set(it, raw);
-      }
-      if (total) {
-        const ents = [...cost.entries()].sort((a, b) => b[1] - a[1]); let top = [], acc = 0;
-        for (const [it, c] of ents) { top.push(it); acc += c; if (acc >= total * MIX_SHARE) break; }
-        // the vees: with the MDs among the main kinds they are the loaded ball, one kind
-        const vi = top.findIndex(it => rawOf.get(it) === 'Humvee'), mi = top.findIndex(it => rawOf.get(it) === 'Missile Defender');
-        if (vi >= 0) { top[vi] = mi >= 0 ? HUMVEES_MD : HUMVEES; if (mi >= 0) top = top.filter((_, i) => i !== mi); }
-        d.state = top.length > MIX_MAX ? { key: 'u:mixed', n: 'mixed army' }
-          : { key: 'u:' + top.map(it => it.key).join('+'), n: top.map(it => it === HUMVEES || it === HUMVEES_MD ? it.n : plurals(it.n)).join(' + ') };   // plural: a mix is many of each
-      }
-    }
   }
   // every seat with placements is described once for the page's control state - the items inside the window and
   // the naming, the description by its own clocks - and kept across filter changes: a filter click is a pass over
@@ -707,80 +637,11 @@ window.ZH_READY.then(function (Z) {
   const seatsKey = () => CACHE.seatsKey;
 
   // --- builds as described ------------------------------------------------------------------------
-  const PART_ON = k => S.parts.includes(k);
-  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-  // the chain after the opening: every later structure, supply expansion and play in the order they came, a run
-  // of the same one counted ("2 EMP Patriot", "3rd-4th supplies", "Terror Tech x2") - one chip per call of emit,
-  // the parts switched off left out (the plays: no chip when nothing crossed - the build reads without it, 2026-09-13)
-  const NTH = n => n >= 6 ? '6th+' : n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
-  function chainEach(d, fn) {   // fn('prod', {it, t}) | fn('sup', {k, t}) | fn('move', m) in time order; ties: structure, expansion, play
-    const st = PART_ON('prod') ? d.steps : [], ex = PART_ON('sup') ? d.exp : [], mv = PART_ON('move') ? d.moves : [];
-    let a = 0, b = 0, c = 0;
-    while (a < st.length || b < ex.length || c < mv.length) {
-      const ta = a < st.length ? st[a].t : Infinity, tb = b < ex.length ? ex[b].t : Infinity, tc = c < mv.length ? mv[c].t : Infinity;
-      if (ta <= tb && ta <= tc) fn('prod', st[a++]); else if (tb <= tc) fn('sup', ex[b++]); else fn('move', mv[c++]);
-    }
-  }
-  function walkChain(d, named, emit) {
-    let run = null;
-    const flush = () => { if (run) emit(run); run = null; };
-    chainEach(d, (part, x) => {
-      if (part === 'prod') {
-        if (run && run.it === x.it) { run.k++; run.key = `p:${x.it.key}x${run.k}`; run.n = named ? counted(run.k, x.it) : ''; run.t = x.t; }
-        else { flush(); run = { part: 'prod', key: 'p:' + x.it.key, n: named ? x.it.n : '', c: 'var(--p-prod)', t: x.t, it: x.it, k: 1 }; }
-      } else if (part === 'sup') {
-        const k = Math.min(x.k, 6);
-        if (run && run.k0) { run.key = `x${run.k0}-${k}`; run.n = named ? `${NTH(run.k0)}\u2013${NTH(k)} supplies` : ''; run.t = x.t; }
-        else { flush(); run = { part: 'sup', key: 'x' + k, n: named ? NTH(k) + ' supply' : '', c: 'var(--p-sup)', t: x.t, k0: k }; }
-      } else {
-        const name = moveName(x);
-        if (run && run.mv && run.n0 === name) { run.k++; run.n = named ? `${name} x${run.k}` : ''; run.key = 'm:' + name + 'x' + run.k; run.t = x.t; }
-        else { flush(); run = { part: 'move', key: 'm:' + moveKey(x), n: named ? name : '', n0: name, k: 1, mv: true, c: moveHow(x) === 'play' ? 'var(--p-fwd)' : 'var(--p-move)', t: x.t }; }
-      }
-    });
-    flush();
-  }
-  // the chips of one seat's description: [{key, n, c, t}] (t = a clock worth a median under the chip); the
-  // wording (n) only when `named` - every seat is keyed, only the rows shown are worded
-  function chipsOf(s, named) {
-    const d = s.d, out = [], fac = D.factions[s.f], side = fac ? fac.side : '';
-    if (PART_ON('bld') && d.bld != null) { const b = BUILDER[side] || ['builder', 'builders']; out.push({ part: 'bld', key: 'b' + Math.min(d.bld, BUILDER_MAX), n: named ? d.bld >= BUILDER_MAX ? `${BUILDER_MAX}+ ${b[1]}` : plural(d.bld, b[0], b[1]) : '', c: 'var(--p-bld)', t: d.bldT.length ? d.bldT[d.bldT.length - 1] : null }); }
-    if (PART_ON('sup')) out.push({ part: 'sup', key: 's' + Math.min(d.sup, 4), n: named ? d.sup >= 4 ? '4+ supplies' : plural(d.sup, 'supply', 'supplies') : '', c: 'var(--p-sup)', t: d.second });
-    if (PART_ON('gat')) { const g = GATHERER[side] || ['gatherer', 'gatherers']; out.push({ part: 'gat', key: 'g' + Math.min(d.gat, 6), n: named ? d.gat >= 6 ? `6+ ${g[1]}` : plural(d.gat, g[0], g[1]) : '', c: 'var(--p-gat)' }); }
-    if (PART_ON('prod')) {
-      if (!d.open && !d.steps.length && !d.tun) out.push({ part: 'prod', key: 'p0', n: 'no production', c: 'var(--p-none)', none: true });
-      if (d.open) out.push({ part: 'prod', key: d.open.key, n: named ? d.open.n : '', c: 'var(--p-prod)', t: d.open.t });
-    }
-    walkChain(d, named, r => out.push(r));
-    if (PART_ON('prod') && d.tun) out.push({ part: 'prod', key: 't' + Math.min(d.tun, 5), n: named ? d.tun >= 5 ? '5+ tunnels' : plural(d.tun, 'tunnel', 'tunnels') : '', c: 'var(--p-prod)' });
-    if (PART_ON('units') && d.state) out.push({ part: 'units', key: d.state.key, n: named ? d.state.n : '', c: 'var(--p-none)' });   // the army's mix, set apart on the right
-    return out;
-  }
-  // the key of one seat's description alone - the same key chipsOf() would give, without the wording; a render
-  // keys every seat (100k, cached on the seat by stamp) and words only the rows it shows, so the two must agree chip by chip
-  // ... and the clocks under the chips, one entry per chip (null where the chip has none), kept on the seat as s.ckt
   const ckStamp = () => S.parts.join(',') + '|' + CACHE.descKey + '|' + CACHE.movesKey;
   const ckOf = s => { if (s.cks !== ckStamp()) { s.ck = chipKey(s); s.cks = ckStamp(); } return s.ck; };   // the seat's key for the current parts and description (chipKey keeps it on the seat)
-  function chipKey(s) {
-    const d = s.d, t = []; let key = '';
-    if (PART_ON('bld') && d.bld != null) { key += 'b' + Math.min(d.bld, BUILDER_MAX); t.push(d.bldT.length ? d.bldT[d.bldT.length - 1] : null); }
-    if (PART_ON('sup')) { key += '|s' + Math.min(d.sup, 4); t.push(d.second); }
-    if (PART_ON('gat')) { key += '|g' + Math.min(d.gat, 6); t.push(null); }
-    if (PART_ON('prod')) {
-      if (!d.open && !d.steps.length && !d.tun) { key += '|p0'; t.push(null); }
-      if (d.open) { key += '|' + d.open.key; t.push(d.open.t); }
-    }
-    walkChain(d, false, r => { key += '|' + r.key; t.push(r.t); });
-    if (PART_ON('prod') && d.tun) { key += '|t' + Math.min(d.tun, 5); t.push(null); }
-    if (PART_ON('units') && d.state) { key += '|' + d.state.key; t.push(null); }
-    s.ckt = t;
-    return key.charAt(0) === '|' ? key.slice(1) : key;
-  }
-  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);   // a chip starts with a capital, whatever it names (the user, 2026-09-14)
   // a chip carries its key and part: a click in the builds puts it in focus (the card below)
   const chip = (it, med) => `<span class="it${it.none ? ' none' : ''}${S.focus && S.focus.key === it.key ? ' focus' : ''}" style="--c:${it.c}"${it.part ? ` data-ck="${esc(it.key)}" data-part="${it.part}" data-n="${esc(cap(it.n))}"` : ''}><i></i>${esc(cap(it.n))}${med != null ? `<small>${fmtT(med)}</small>` : ''}</span>`;
   // the chips in groups, one per part with its header, the army's set apart on the right (the user, 2026-09-14)
-  const PART_NAME = Object.fromEntries(PARTS.map(([k, l]) => [k, l]));
   const chips = (its, meds, extra) => {
     const groups = [];
     its.forEach((it, j) => { const g = groups[groups.length - 1]; if (g && g.part === it.part) g.js.push(j); else groups.push({ part: it.part, js: [j] }); });
@@ -790,7 +651,10 @@ window.ZH_READY.then(function (Z) {
   // the builds of a selection under a description: two passes over its seats (keying each, then wording the rows shown),
   // ~400 ms over the library - the last few are kept by selection and stamp, so a part toggled back or a filter off
   // costs the rows alone
-  const DESC_MEMO = new Map(), descMemoKey = () => [seatsKey(), ckStamp(), DESC_ROWS].join('|');
+  // the order: by games, or by win rate among the builds with WR_MIN results (a build of one game wins 100%
+  // or 0%), the thinner ones after by games (the user, 2026-09-16)
+  const WR_MIN = 30, byWr = (a, b) => (b.nw >= WR_MIN) - (a.nw >= WR_MIN) || (a.nw >= WR_MIN ? b.w / b.nw - a.w / a.nw || b.nw - a.nw : b.n - a.n);
+  const DESC_MEMO = new Map(), descMemoKey = () => [seatsKey(), ckStamp(), DESC_ROWS, S.sort].join('|');
   function descOf(seats) {
     const stamp = ckStamp();
     return Z.memo(DESC_MEMO, descMemoKey(), () => {
@@ -804,7 +668,7 @@ window.ZH_READY.then(function (Z) {
         r.n++;
         if (s.w === 1) { r.w++; r.nw++; } else if (s.w === 0) r.nw++;
       }
-      const desc = [...sig.values()].sort((a, b) => b.n - a.n), rows = desc.slice(0, DESC_ROWS);
+      const desc = [...sig.values()].sort(S.sort === 'wr' ? byWr : (a, b) => b.n - a.n), rows = desc.slice(0, DESC_ROWS);
       // the rows shown get their wording, their clocks (a median per chip) and their factions in a second pass
       const shown = new Map(rows.map(r => [r.key, r]));
       for (const r of rows) { r.its = null; r.facs = new Map(); }
@@ -827,10 +691,10 @@ window.ZH_READY.then(function (Z) {
     if (!S.parts.length) { $('desc').innerHTML = '<div class="empty">Pick at least one part to describe by.</div>'; $('desc-note').textContent = ''; return; }
     const facsOf = r => [...r.facs.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([f, n]) => `${shortName(D.factions[f])} ${fmtPct(n / r.n)}`).join(', ');
     if (S.table) {
-      $('desc').innerHTML = `<div class="tbl-wrap"><table><thead><tr><th class="l">Build</th><th>Games</th><th>Share</th><th>Win Rate</th><th>With Result</th><th class="l">Mostly</th></tr></thead><tbody>${rows.map(r =>
-        `<tr><td class="l">${esc(r.its.map(i => cap(i.n)).join(' \u00b7 '))}</td><td>${fmtInt(r.n)}</td><td>${fmtPct(r.n / N)}</td><td>${r.nw ? fmtPct(r.w / r.nw) : '\u2014'}</td><td>${fmtInt(r.nw)}</td><td class="l">${esc(facsOf(r))}</td></tr>`).join('')}</tbody></table></div>`;
+      $('desc').innerHTML = `<div class="tbl-wrap"><table><thead><tr><th class="l">Build</th><th>Games</th><th>Share</th><th>Win Rate${WR_LINK}</th><th>With Result</th><th class="l">Mostly</th></tr></thead><tbody>${rows.map(r =>
+        `<tr><td class="l">${esc(r.its.map(i => cap(i.n)).join(' \u00b7 '))}</td><td>${fmtInt(r.n)}</td><td>${fmtPct(r.n / N)}</td><td class="wr">${wrBar(r.w, r.nw)}</td><td>${fmtInt(r.nw)}</td><td class="l">${esc(facsOf(r))}</td></tr>`).join('')}</tbody></table></div>`;
     } else {
-      const max = rows[0].n / N;
+      const max = rows.reduce((m, r) => Math.max(m, r.n), 0) / N;   // the share bars scale to the biggest row shown (sorted by win rate it is not the first)
       // the build's parts flow in one cell, each part's chips a group (a column per part lined the plays up
       // under the widest buildings in the list, a void after every shorter one - the user, 2026-09-14: "move left,
       // there's plenty of space"); the Units column set apart on the right
@@ -839,12 +703,12 @@ window.ZH_READY.then(function (Z) {
       // the chain in its order - an expansion or a play after the structure it followed - a group per run of one part
       const flowCell = r => { const gs = []; r.its.forEach(it => { if (it.part === 'units') return; const g = gs[gs.length - 1]; if (g && g.part === it.part) g.h += chip(it); else gs.push({ part: it.part, h: chip(it) }); }); return gs.map(g => `<span class="pg">${g.h}</span>`).join(''); };
       $('desc').innerHTML = `<div class="seq-rows cols" style="grid-template-columns:minmax(0, 1fr)${army ? ' minmax(0, auto)' : ''} 110px 76px 92px">
-        <div class="seq-head"><div>${esc(flow.map(c => PART_NAME[c]).join(' \u00b7 '))}</div>${army ? `<div class="army">${esc(PART_NAME.units)}</div>` : ''}<div class="r">Share</div><div class="r"></div><div class="r">Win Rate</div></div>
+        <div class="seq-head"><div>${esc(flow.map(c => PART_NAME[c]).join(' \u00b7 '))}</div>${army ? `<div class="army">${esc(PART_NAME.units)}</div>` : ''}<div class="r">Share</div><div class="r"></div><div class="r">Win Rate${WR_LINK}</div></div>
         ${rows.map((r, i) => `<div class="seq${r.nw < 20 ? ' thin' : ''}${S.focus && S.focus.key === r.key ? ' focus' : ''}" data-i="${i}" data-key="${esc(r.key)}">
           <div class="cell">${flowCell(r)}</div>${army ? `<div class="cell army">${cell(r, 'units')}</div>` : ''}
           <div class="track share"><div class="bar" style="width:${(r.n / N / max * 100).toFixed(2)}%"></div></div>
           <div class="t">${fmtPct(r.n / N)}<small>${fmtInt(r.n)}</small></div>
-          <div class="wr">${wrHtml(r.w, r.nw)}</div></div>`).join('')}</div>`;
+          <div class="wr">${wrBar(r.w, r.nw)}</div></div>`).join('')}</div>`;
       Z.tips($('desc'), '.seq', el => {
         const r = rows[+el.dataset.i];
         return `<b>${fmtInt(r.n)} player-games</b> <span class="d">\u00b7 ${fmtPct(r.n / N)} of the selection${r.nw ? ` \u00b7 wins ${fmtPct(r.w / r.nw)} of ${fmtInt(r.nw)} with a result` : ''}</span>
@@ -856,7 +720,8 @@ window.ZH_READY.then(function (Z) {
     else { el.classList.add('more'); el.style.maxHeight = (DESC_H || 900) + 'px'; }
     const more = (DESC.length > rows.length ? '<button class="chip" data-more="1">Show more</button>' : '') + (rows.length > 25 ? '<button class="chip" data-less="1">Top 25</button>' : '');
     if (more) el.insertAdjacentHTML('beforeend', `<div class="seq-more">${more}</div>`);
-    $('desc-note').textContent = `${fmtInt(DESC.length)} distinct builds, ${rows.length} shown \u00b7 the top one is ${fmtPct(rows[0].n / N)} of ${fmtInt(N)} player-games \u00b7 supplies, gatherers, structures and plays counted by the clock in the title, the opening is every production building the starting cash bought (sticker prices of all structures placed so far within it) in no order, and the supplies placed before any play left; everything later is a step of its own in the order it came - a structure, an expansion (a 3rd supply after the raid is not a 3-supply opening), a play - a run of the same one counted, a structure past ${S.fwd}% of the way to the opponent a Forward one; the plays are every group over the 3/4 line before that clock with an order at something of theirs (a deny anywhere, their units on their side only), written as what went and what it went at - their structures it took down by 5:00, else the ones it was sent at, else its first order - in order; Unit Mix, boxed on the right, is the army's mix by the clock: the kinds that make up three quarters of what it spent on army units (infantry counted at half price: it is always there in numbers), largest share first, mixed when it takes more than three; Humvees (MDs) = vees and MDs both main kinds`;
+    const most = [...DESC].sort((a, b) => b.n - a.n)[0];
+    $('desc-note').textContent = `${fmtInt(DESC.length)} distinct builds, ${rows.length} shown${S.sort === 'wr' ? ` by win rate among those with ${WR_MIN}+ results, the thinner ones after by games` : ''} \u00b7 the most played is ${fmtPct(most.n / N)} of ${fmtInt(N)} player-games \u00b7 supplies, gatherers, structures and plays counted by the clock in the title, the opening is every production building the starting cash bought (sticker prices of all structures placed so far within it) in no order, and the supplies placed before any play left; everything later is a step of its own in the order it came - a structure, an expansion (a 3rd supply after the raid is not a 3-supply opening), a play - a run of the same one counted, a structure past ${S.fwd}% of the way to the opponent a Forward one; the plays are every group over the 3/4 line before that clock with an order at something of theirs (a deny anywhere, their units on their side only), written as what went and what it went at - their structures it took down by 5:00, else the ones it was sent at, else its first order - in order; Unit Mix, boxed on the right, is the army's mix by the clock: the kinds that make up three quarters of what it spent on army units (infantry counted at half price: it is always there in numbers), largest share first, mixed when it takes more than three; Humvees (MDs) = vees and MDs both main kinds`;
   }
 
   // the copy card factors the build (the user, 2026-09-13): one plot per element - the supplies, the opening
@@ -1323,28 +1188,9 @@ window.ZH_READY.then(function (Z) {
   const MAP_SPOT_MIN = 3;   // player-games: a spot with fewer is a stray and stays off the map (2,197 spots with every stray drawn hid the picture)
   const MAP_SPOT_FEW = 300;   // placements of one item: under this its strays are drawn too - too few to cluster, and a picture of nothing said nothing (the user, 2026-09-14; the raid entrances beside the structures too)
   const mapRgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
-  const RASTER = new Map();   // crc -> promise of the decoded terrain
-  const DATA_DIR = window.ZH_DATA_BASE || 'data/';   // the terrain and raid files sit with the data (config.js)
-  const RASTER_FILE = new Map();   // data/maps/<file>.json -> promise of its JSON: a map's own record, or a tail shard's {maps: {crc: record}}
-  const MAP_BY_CRC = new Map(Z.MAPS.map(m => [m.crc, m]));
-  const inflate = async b64 => {
-    const bin = atob(b64), bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
-  };
-  // mapinfo's `ras` names the file under data/maps/ that holds the map's raster (the most played maps
-  // have their own, the long tail shares shards of ~3 MB); no `ras`, no map file - the tile says so
-  function raster(crc) {
-    if (!RASTER.has(crc)) RASTER.set(crc, (async () => {
-      const m = MAP_BY_CRC.get(crc), f = m && m.info.ras;
-      if (!f) return null;
-      if (!RASTER_FILE.has(f)) RASTER_FILE.set(f, fetch(DATA_DIR + 'maps/' + f + '.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }));
-      const file = await RASTER_FILE.get(f), j = file.maps ? file.maps[crc] : file;
-      const [hgt, flg] = await Promise.all([inflate(j.hgt), inflate(j.flg)]);
-      return { w: j.w, h: j.h, hr: j.hr, starts: j.starts || [], hgt, flg, img: null, theme: '' };
-    })().catch(() => null));
-    return RASTER.get(crc);
-  }
+  // the terrain: its raster and image live in terrain.js since 2026-09-15 (the Replays tab draws the same map)
+  const T = window.ZH_TERRAIN(Z), { DATA_DIR, MAP_BY_CRC, inflate, raster, isLight, lerp } = T;
+  const terrainImage = R => T.terrainImage(R, MAP_PAL(), MAP_TINT());
   // the sorties of a map, loaded with its terrain: data/raids/index.json names each map's file (its own, or a tail
   // shard's {maps: {crc: ...}}); a map file is {m: {match id: [[sp, family, n, seconds, unit, target template, reached, x0, y0, x1, y1, ...], ...]}}
   const RAIDS = new Map(), RAIDS_FILE = new Map();
@@ -1397,43 +1243,6 @@ window.ZH_READY.then(function (Z) {
     m.set(row, out = [sortieItem('u', raidUnits(RD, row[4])), sortieItem('t', t)]);
     return out;
   };
-  const isLight = () => document.documentElement.dataset.theme === 'light';
-  // the terrain as an image the size of the grid, by the Terrain choice: relief = grey by height, water blue, cliffs a
-  // step darker (light) or lighter (dark); flat = one ground tone, cliffs a clear step off it; bold = the ground
-  // near the page's, the cliffs in ink and the water saturated. Row 0 = the top = y max
-  const RAMP = {   // the tints' height ramps, low -> high, per theme
-    light: { grey: [[150, 152, 148], [238, 238, 234]], desert: [[156, 124, 72], [238, 218, 168]], snow: [[132, 142, 158], [242, 246, 252]], jungle: [[62, 98, 54], [168, 202, 126]], ash: [[40, 34, 36], [124, 110, 106]] },
-    dark: { grey: [[36, 38, 42], [146, 148, 146]], desert: [[96, 76, 42], [204, 180, 130]], snow: [[96, 104, 118], [214, 222, 234]], jungle: [[34, 60, 32], [136, 170, 100]], ash: [[14, 12, 14], [88, 76, 74]] } };
-  const WATER = { light: [126, 166, 214], dark: [30, 62, 116] }, WATER_BOLD = { light: [56, 108, 190], dark: [44, 96, 176] }, INK = { light: [38, 38, 42], dark: [232, 232, 226] };
-  const LAVA = { light: [214, 84, 22], dark: [178, 58, 14] }, LAVA_BOLD = { light: [236, 96, 20], dark: [222, 80, 16] };   // the ash tint's water
-  const waterOf = (tint, theme, bold) => tint === 'ash' ? (bold ? LAVA_BOLD : LAVA)[theme] : (bold ? WATER_BOLD : WATER)[theme];
-  const lerp = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
-  function terrainLook(theme, pal, tint) {   // -> { lo, hi, water, cliff } (cliff null = the relief's grey stepped off)
-    const [lo, hi] = RAMP[theme][tint], light = theme === 'light';
-    if (pal === 'flat') { const g = lerp(lo, hi, .6); return { lo: g, hi: g, water: waterOf(tint, theme, false), cliff: light ? g.map(v => v * .6) : g.map(v => v * .55 + 64) }; }
-    if (pal === 'bold') return light ? { lo: lerp(lerp(lo, hi, .7), [255, 255, 255], .5), hi: lerp(hi, [255, 255, 255], .6), water: waterOf(tint, 'light', true), cliff: INK.light }
-      : { lo: lerp(lo, [0, 0, 0], .3), hi: lerp(lerp(lo, hi, .4), [0, 0, 0], .2), water: waterOf(tint, 'dark', true), cliff: INK.dark };
-    return { lo, hi, water: waterOf(tint, theme, false), cliff: null };
-  }
-  function terrainImage(R) {
-    const theme = isLight() ? 'light' : 'dark', pal = MAP_PAL(), tint = MAP_TINT(), look = theme + '|' + pal + '|' + tint;
-    if (R.img && R.theme === look) return R.img;
-    const { lo, hi, water, cliff } = terrainLook(theme, pal, tint);
-    const cv = document.createElement('canvas'); cv.width = R.w; cv.height = R.h;
-    const cx = cv.getContext('2d'), img = cx.createImageData(R.w, R.h), d = img.data, span = Math.max(1, R.hr[1] - R.hr[0]);
-    for (let j = 0; j < R.h; j++) {
-      const src = j * R.w, dst = (R.h - 1 - j) * R.w;
-      for (let i = 0; i < R.w; i++) {
-        const t = (R.hgt[src + i] - R.hr[0]) / span, f = R.flg[src + i];
-        let r = lo[0] + (hi[0] - lo[0]) * t, g = lo[1] + (hi[1] - lo[1]) * t, b = lo[2] + (hi[2] - lo[2]) * t;
-        if (f & 1) { r = water[0]; g = water[1]; b = water[2]; }
-        if (f & 2) { if (cliff) { r = cliff[0]; g = cliff[1]; b = cliff[2]; } else if (theme === 'light') { r *= .7; g *= .71; b *= .74; } else { r = r * .55 + 58; g = g * .55 + 58; b = b * .55 + 64; } }   // a cliff: its own tone, or the relief's grey stepped off it - the heat keeps every hue
-        const p = (dst + i) * 4; d[p] = r; d[p + 1] = g; d[p + 2] = b; d[p + 3] = 255;
-      }
-    }
-    cx.putImageData(img, 0, 0); R.img = cv; R.theme = look;
-    return cv;
-  }
   // a separable gaussian over a grid, in place: three box passes each way (Kutskir's sizes), so a wide blur at
   // screen resolution costs the same as a narrow one
   function boxBlur(a, w, h, sigma) {
@@ -1966,6 +1775,7 @@ window.ZH_READY.then(function (Z) {
     $('parts').innerHTML = PARTS.map(([k, l, c]) => `<button class="chip" aria-pressed="${PART_ON(k)}" data-part="${k}" style="--c:var(${c})"><span class="sw"></span><span>${esc(l)}</span></button>`).join('');
     seg($('by'), CLOCKS, S.by, 'data-by');
     seg($('descmode'), [['chips', 'Chips'], ['table', 'Table']], S.table ? 'table' : 'chips', 'data-descmode');
+    seg($('descsort'), [['games', 'Most played'], ['wr', 'Win rate']], S.sort, 'data-descsort');
     $('by-2').innerHTML = $('by-3').innerHTML = $('by-4').innerHTML = $('by').innerHTML;   // every "By" control shares S.by; the map card's clock is its own
     $('clock-1').textContent = $('clock-2').textContent = $('clock-focus').textContent = 'by ' + fmtT(S.by);   // the focus card reads the same clock as the builds
     renderMapClock(); $('clock-map').textContent = 'by ' + fmtT(S.mapBy);
@@ -2063,7 +1873,7 @@ window.ZH_READY.then(function (Z) {
   }
   function renderNow() {
     const seats = MAP_SEATS = collect(), sk = seatsKey();
-    const descKey = [sk, ckStamp(), S.table, DESC_ROWS].join('|');
+    const descKey = [sk, ckStamp(), S.table, DESC_ROWS, S.sort].join('|');
     if (LAST.desc !== descKey) { renderDesc(seats); LAST.desc = descKey; LAST.focus = null; }
     card('tiles', [sk, S.by].join('|'), ['tiles'], () => renderTiles(seats));
     card('mirror', [sk, S.by, S.fu, S.cls].join('|'), ['desc-2', 'desc-note-2'], () => mirrorDesc(seats, seats.length));
@@ -2090,6 +1900,7 @@ window.ZH_READY.then(function (Z) {
     else if (d.fu) S.fu = +d.fu;
     else if (d.ucls) S.cls = d.ucls;
     else if (d.descmode) S.table = d.descmode === 'table';
+    else if (d.descsort) S.sort = d.descsort;
     else if (d.window) S.window = +d.window;
     else if (d.k) S.k = +d.k;
     else if (d.seqmode) S.seqTable = d.seqmode === 'table';

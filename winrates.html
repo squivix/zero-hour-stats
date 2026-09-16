@@ -5,6 +5,24 @@
 <link rel="stylesheet" href="common.css">
 <script>document.documentElement.dataset.theme = (function () { try { return localStorage.getItem("zh-theme"); } catch (e) { return null; } })() || "light";</script>
 <style>
+  main > .card { scroll-margin-top: 58px; }   /* a link into a card lands under the sticky Filters bar otherwise */
+  :root { --p-bld: #6fae5a; --p-sup: #d8b23a; --p-gat: #b8962a; --p-prod: #5a93d9; --p-fwd: #9a6fd0; --p-move: #e2603f; --p-none: #7d7d78; }   /* the chips' part colours, as on the Build orders tab */
+  :root[data-theme="light"] { --p-bld: #3f8a33; --p-sup: #a8861a; --p-gat: #8a6f14; --p-prod: #2f6fb8; --p-fwd: #7a4fb0; --p-move: #c9482a; }
+  /* Win Rate by Build Order: a build's chips take the label column, the bar and the numbers at a fixed width on the right */
+  .parts { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+  .parts .chip { padding: 3px 8px; font-size: 12px; }
+  #bo .items { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; min-width: 0; padding: 2px 0; }   /* the chips, as on the Build orders tab */
+  #bo .it { display: inline-flex; align-items: center; gap: 5px; padding: 1px 6px; border-radius: 3px; background: var(--ground); border: 1px solid var(--line); font-size: 12px; white-space: nowrap; line-height: 1.5; color: var(--ink); }
+  #bo .it i { width: 7px; height: 7px; border-radius: 2px; background: var(--c); flex: none; }
+  #bo .it.none { color: var(--muted); border-style: dashed; }
+  #bo .it.army { margin-left: auto; }   /* the army's mix set apart on the right, as on the Build orders tab */
+  #bo .wr { grid-template-columns: minmax(0, 1fr) 220px 76px; height: auto; min-height: 26px; }
+  #bo .wr .k { white-space: normal; overflow: visible; }
+  #bo .wr.ax { min-height: 14px; }
+  #bo.long .rows { max-height: 640px; overflow-y: auto; padding-right: 6px; scrollbar-gutter: stable; }   /* past the top rows the list scrolls */
+  #bo.long .rows .wr { content-visibility: auto; contain-intrinsic-size: auto 30px; }
+  #bo .rows .bmore { display: flex; gap: 14px; padding: 6px 0 2px; font-size: 12px; color: var(--muted); }
+  #bo .rows .bmore button { background: none; border: 1px solid var(--line-strong); border-radius: 3px; padding: 1px 8px; font: inherit; font-size: 12px; color: var(--accent); cursor: pointer; }
   /* matchup heatmap */
   .hm-wrap { overflow-x: auto; }
   .hm { border-collapse: separate; border-spacing: 2px; width: auto; margin: 0 auto; font-size: 12px; }   /* centred in the card (the user, 2026-09-14) */
@@ -44,6 +62,8 @@
   .wr .b { position: absolute; top: 2px; bottom: 2px; background: var(--win); border-radius: 2px; }
   .wr .b.lo { background: var(--lose); }
   .wr .ci { position: absolute; top: 5px; height: 2px; background: var(--ink); opacity: .55; }
+  .wr .ci::before, .wr .ci::after { content: ''; position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--ink); }   /* the interval's ends */
+  .wr .ci::before { left: 0; } .wr .ci::after { right: 0; }
   .wr .v { text-align: right; }
   .wr .v small { color: var(--muted); font-size: 11px; margin-left: 4px; }
   .wr.faint .b { opacity: .35; }
@@ -53,6 +73,12 @@
   .ogrp .gh { font-family: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif; font-size: 17px; font-weight: 600; letter-spacing: .02em; color: var(--ink); margin-bottom: 10px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }   /* a group of facets: the card's own face, between the title and the facet labels */
   .card-h h2 .clock { color: var(--accent); margin-left: 4px; }   /* the clock the pane counts by, in the title, as on the build-order tab (the user, 2026-09-14) */
   .facet .lbl .sp { font-weight: 400; color: var(--muted); margin-left: 6px; font-size: 11px; }
+  /* a numeric facet's bins are the reader's: the top bin splits on a click, "bins" takes typed edges, "reset" the defaults */
+  .facet .lbl .xb { background: none; border: 1px solid var(--line-strong); border-radius: 3px; padding: 0 5px; margin-left: 6px; font-size: 10px; font-weight: 400; color: var(--muted); cursor: pointer; vertical-align: 1px; }
+  .facet .lbl .xb:hover { color: var(--ink); border-color: var(--ink-2); }
+  .wr .k .xp { background: none; border: 0; padding: 0; color: inherit; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+  .wr .k .xp i { font-style: normal; font-size: 8px; color: var(--muted); }
+  .wr .k .xp:hover { color: var(--ink); }
   /* the play names run long ("Terror Tech -> Army at Opponent Base"): a wider label that may take a second line (the user, 2026-09-14) */
   #play .facets { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
   #play .wr { grid-template-columns: 190px minmax(0, 1fr) 76px; height: auto; min-height: 22px; }
@@ -121,6 +147,7 @@
   .bin.more { cursor: pointer; background: none; color: var(--accent); border-style: dashed; font: inherit; font-size: 11px; }
   .bins.open .bin.more { display: none; }
   .pmore { color: var(--muted); font-size: 12px; padding: 8px 0 0; border-top: 1px solid var(--line); }
+  .parts-row { justify-content: flex-end; }   /* as on the Build orders tab: the clock left and the parts right, on their own row under the title */
 </style>
 
 <header>
@@ -138,7 +165,7 @@
     <div class="active" id="active"></div>
     <div class="tiles" id="tiles"></div>
 
-    <section class="card">
+    <section class="card" id="card-hm">
       <div class="card-h">
         <h2 class="disp">Matchups</h2>
         <div class="spacer"></div>
@@ -149,15 +176,15 @@
       <div class="foot"><span id="hm-note"></span></div>
     </section>
 
-    <section class="card">
+    <section class="card" id="card-facets">
       <div class="card-h"><h2 class="disp">Win Rate by</h2><div class="spacer"></div><span class="hint">the selection, split one way at a time; whiskers are 95% intervals</span></div>
       <div class="facets" id="facets"></div>
     </section>
 
 
-    <section class="card">
+    <section class="card" id="card-open">
       <div class="card-h">
-        <h2 class="disp">Win Rate by Opening <span class="clock" id="clock-oby"></span></h2>
+        <h2 class="disp">Win Rate by Opening Posture <span class="clock" id="clock-oby"></span></h2>
         <div class="spacer"></div>
         <span class="hint">how the player opened, and how often they went on to win</span>
         <div class="ctl"><span class="lbl">By</span><div class="seg" id="oby"></div></div>
@@ -167,7 +194,18 @@
       <div class="foot"><span id="open-note"></span><a class="how" href="scores.html">how the opening scores are made &rarr;</a></div>
     </section>
 
-    <section class="card">
+    <section class="card" id="card-bo">
+      <div class="card-h">
+        <h2 class="disp">Win Rate by Build Order <span class="clock" id="clock-bby"></span></h2>
+        <div class="spacer"></div>
+        <div class="ctl"><span class="lbl">Sort</span><div class="seg" id="bsort"></div></div>
+      </div>
+      <div class="card-h parts-row"><div class="ctl"><span class="lbl">By</span><div class="seg" id="bby"></div></div><div class="spacer"></div><div class="ctl"><span class="lbl">Describe by</span><div class="parts" id="bparts"></div></div></div>
+      <div class="opens" id="bo"></div>
+      <div class="foot"><span id="bo-note"></span><a class="how" href="buildorders.html">how builds are described &rarr;</a></div>
+    </section>
+
+    <section class="card" id="card-eco">
       <div class="card-h">
         <h2 class="disp">Win Rate by Eco <span class="clock" id="clock-eby"></span></h2>
         <div class="spacer"></div>
@@ -179,7 +217,7 @@
       <div class="foot"><span id="eco-note"></span></div>
     </section>
 
-    <section class="card">
+    <section class="card" id="card-umix">
       <div class="card-h">
         <h2 class="disp">Win Rate by Unit Mix <span class="clock" id="clock-uby"></span></h2>
         <div class="spacer"></div>
@@ -191,7 +229,7 @@
       <div class="foot"><span id="umix-note"></span></div>
     </section>
 
-    <section class="card">
+    <section class="card" id="card-play">
       <div class="card-h">
         <h2 class="disp">Win Rate by Play <span class="clock" id="clock-pby"></span></h2>
         <div class="spacer"></div>
@@ -204,7 +242,7 @@
       <div class="foot"><span id="play-note"></span><a class="how" href="plays.html">how plays are detected and named &rarr;</a></div>
     </section>
 
-    <section class="card">
+    <section class="card" id="card-curve">
       <div class="card-h">
         <h2 class="disp">Win Rate over Game Length</h2>
         <div class="spacer"></div>
@@ -240,11 +278,13 @@
 <script src="data.js"></script>
 <script src="common.js"></script>
 <script src="plays.js"></script>
+<script src="builds.js"></script>
 <script>
 window.ZH_READY.then(function (Z) {
+  let HASH_DONE = false;
   const { D, F, SIDES, FACS, ELO, CASH, $, esc, fmtPct, fmtPct1, fmtInt, fmtCash, fmtPts, wilson, quant, seg } = Z;
 
-  const DEFAULT = { hm: 'facs', oby: 180, oord: 'group', eby: 180, eord: 'group', uby: 180, uord: 'group', pby: 180, pord: 'group', pall: 'top', wby: 120, wgames: 'rated', wall: 'top' };
+  const DEFAULT = { x: {}, hm: 'facs', bby: 180, bparts: ['bld', 'sup', 'prod', 'move', 'units'], bsort: 'games', oby: 180, oord: 'group', eby: 180, eord: 'group', uby: 180, uord: 'group', pby: 180, pord: 'group', pall: 'top', wby: 120, wgames: 'rated', wall: 'top' };
   const S = Z.loadPage('zh-winrates-page', 2, DEFAULT);
 
   // a decided player-game: this player has a result and the opponent has the other one
@@ -275,11 +315,67 @@ window.ZH_READY.then(function (Z) {
   const SD = ['very low', 'low', 'mid', 'high', 'very high'], sdIdx = v => v <= -1 ? 0 : v <= -.5 ? 1 : v < .5 ? 2 : v < 1 ? 3 : 4;   // the score in SD: \u2264 -1, to -1/2, to +1/2, to 1, over
   const cnt = (v, top) => Math.min(v, top), cntBins = (top, zero) => [...Array(top + 1).keys()].map(i => i === top ? `${top}+` : i === 0 && zero ? zero : String(i));
   const CLK = t => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  // a numeric read keeps the seat's value at a fine slot (q units, capped) and shows bins cut at edges over the slots,
+  // so a "+" bin opens on a click and the edges can be typed (the user, 2026-09-15: "expand the 4.5k+ category ...
+  // click on it and no longer grouping so many, or maybe a custom group") at no pass over the seats
+  const SCALE = { count: { q: 1, cap: 64 }, money: { q: 250, cap: 200 }, time: { q: 5, cap: 60 } };   // to 64, $50k, 5:00
+  const num = (fmt, edges, o) => ({ fmt, edges, ...SCALE[fmt], ...(o || {}) }), cntNum = top => num('count', [...Array(top).keys()].map(i => i + 1), { zero: 'none' });   // o: zero = the label of 0, none = of -1
+  const numSlot = (sc, v) => v < 0 ? (sc.none ? sc.cap + 1 : -1) : v === 0 && sc.zero ? sc.cap + 2 : Math.min(sc.cap, Math.floor(v / sc.q));   // -1 without a none label: unknown, not counted
+  const fmtK = v => { const t = (v / 1000).toFixed(v % 1000 ? v % 500 ? 2 : 1 : 0); return (t.includes('.') ? t.replace(/0+$/, '').replace(/\.$/, '') : t) + 'k'; };
+  const numLabel = (sc, a, b) => {   // the bin [a, b) in value units, b null = open
+    if (sc.fmt === 'time') return a === 0 ? `< ${CLK(b)}` : b == null ? `${CLK(a)}+` : `${CLK(a)}\u2013${CLK(b)}`;
+    if (sc.fmt === 'money') return a <= sc.q ? `< ${fmtK(b)}` : b == null ? `${fmtK(a)}+` : `${fmtK(a).slice(0, -1)}\u2013${fmtK(b)}`;
+    return b == null ? `${a}+` : b === a + 1 ? String(a) : a === 0 ? `\u2264 ${b - 1}` : `${a}\u2013${b - 1}`;
+  };
+  function numBins(sc, edges) {   // -> [[key, label, first slot, past-the-last slot]], the zero bin first, the none bin last
+    const out = []; let prev = sc.zero ? sc.q : 0;
+    if (sc.zero) out.push(['z', sc.zero, sc.cap + 2, sc.cap + 3]);
+    for (const e of edges) { if (e > prev) { out.push(['b' + prev, numLabel(sc, prev, e), prev / sc.q, e / sc.q]); prev = e; } }
+    out.push(['b' + prev, numLabel(sc, prev, null), prev / sc.q, sc.cap + 1]);
+    if (sc.none) out.push(['n', sc.none, sc.cap + 1, sc.cap + 2]);
+    return out;
+  }
+  const numBinOf = (sc, slot) => numBins(sc, sc.edges).findIndex(b => slot >= b[2] && slot < b[3]);   // the default bin's index, for the model
+  const X_N = 4;   // a click on the top bin cuts it at the last step, this many more bins
+  function numEdges(sc, key) { const x = S.x && S.x[key]; return Array.isArray(x) && x.length ? x : sc.edges; }
+  function numExpand(sc, key) { const e = numEdges(sc, key).slice(), step = e.length > 1 ? e[e.length - 1] - e[e.length - 2] : e[0]; for (let i = 0; i < X_N; i++) { const t = e[e.length - 1] + step; if (t >= sc.cap * sc.q) break; e.push(t); } return e; }
+  // typed edges: money in $ or k (4500 / 4.5k), times as m:ss or seconds, counts as they are; rounded to the slot
+  function numAsk(sc, key) {
+    const show = v => sc.fmt === 'time' ? CLK(v) : sc.fmt === 'money' ? fmtK(v) : String(v);
+    const raw = prompt(`Bins for this facet: the edges, comma-separated${sc.fmt === 'time' ? ' (m:ss or seconds)' : sc.fmt === 'money' ? ' ($, or 4.5k)' : ''}. Blank puts the defaults back.`, numEdges(sc, key).map(show).join(', '));
+    if (raw == null) return null;
+    const parse = t => { const m = /^(\d+):(\d\d)$/.exec(t); if (m) return +m[1] * 60 + +m[2]; const k = /^\$?([\d.]+)k$/i.exec(t); return k ? +k[1] * 1000 : +t.replace(/^\$/, ''); };
+    const e = [...new Set(raw.split(/[,\s]+/).filter(Boolean).map(parse).filter(v => v > 0 && v < sc.cap * sc.q).map(v => Math.round(v / sc.q) * sc.q))].sort((a, b) => a - b);
+    return e;
+  }
   const SHARE = ['none', '< 25%', '25\u201350%', '50\u201375%', '75%+'], shareIdx = v => v === 0 ? 0 : v < .25 ? 1 : v < .5 ? 2 : v < .75 ? 3 : 4;
   const isGatherer = t => /Chinook|SupplyTruck|InfantryWorker/.test(t.raw), isSupply = t => /Supply(Center|Stash)\b/.test(t.raw) && !/Fake/.test(t.raw);
   // the plays as the Build orders tab words them (plays.js): a play name gets an id so a read can return it; a read
   // marked multi returns every play the seat attempted by the clock, so a seat counts once in each of its plays' bins
   const PL = window.ZH_PLAYS(Z), PLAY_ID = new Map(), PLAY_NAME = [];
+  // the builds as the Build orders tab describes them (builds.js): a seat's description at the card's clock, keyed
+  // under its parts, interned to an id the pass tallies. The seat keeps two things: its description packed to what
+  // the key reads (p._bc, per naming and clock - a few ints, not the description) and the id under the parts on
+  // (p._bi) - a parts toggle re-keys 300k seats from the packs (~1 us each), only a clock or naming switch describes
+  // them again, in slices behind the strip (render); a click back to an earlier setting is in the aggregation memo
+  const BD = window.ZH_BUILDS(Z, PL), B_FWD = 50, BKEY = new Map(), BREP = [];   // BREP[id] = a seat that has the build, to word it
+  const OPENN = [];   // the opening groups' wording per naming (builds.js describe)
+  const bOn = k => S.bparts.includes(k);
+  let B_DS = '', B_ST = '';   // the description's stamp (naming, clock) and the key's (with the parts), set once per pass (bStamps)
+  const bStamps = () => { B_DS = `${PL.SID}|${S.bby}`; B_ST = `${B_DS}|${S.bparts.join(',')}`; };
+  const bSide = p => { const f = D.factions[p.f]; return f ? f.side : ''; };
+  function buildDesc(p, g) { const d = BD.describe(p, g, { by: S.bby, fwd: B_FWD, openN: OPENN[PL.SID] || (OPENN[PL.SID] = new Map()) }); BD.describeMoves(p, d, { move: S.bby }); return d; }
+  function buildId(p, g) {   // -1: no placements known
+    if (!p.pz) return -1;
+    const c = p._bi;
+    if (c && c.s === B_ST) return c.id;
+    let pk = p._bc; if (!pk || pk.s !== B_DS) pk = p._bc = { s: B_DS, a: BD.pack(buildDesc(p, g)) };
+    const key = BD.packKey(pk.a, bOn);
+    let id = BKEY.get(key); if (id == null) { id = BREP.length; BKEY.set(key, id); BREP.push([p, g]); }
+    p._bi = { s: B_ST, id };
+    return id;
+  }
+  const buildCold = p => !!p.pz && !(p._bc && p._bc.s === B_DS);   // cold: to describe (a re-key from the pack is not worth a slice)
   const soAt = PL.soAt, soNext = PL.soNext;   // a sortie's layout in the "so" runs (plays.js)
   const playId = n => { let i = PLAY_ID.get(n); if (i == null) { i = PLAY_NAME.length; PLAY_ID.set(n, i); PLAY_NAME.push(n); } return i; };
   const playsBy = (p, by) => PL.movesOf(p).filter(m => m.t <= by);
@@ -287,7 +383,10 @@ window.ZH_READY.then(function (Z) {
   // the seat playing the other side of a 1v1: the one bit set in its opposition mask (used for the Leaning
   // vs Their Leaning matrix below - what each posture does against each other, not just on its own)
   const oppOf = (p, g) => { for (let j = 0; j < g.p.length; j++) if ((p.om >> j) & 1) return g.p[j]; return null; };
-  const LEAN_LABELS = ['Aggressive', 'Greedy', 'Defensive', 'Balanced'];
+  // Passive, not "Balanced": the fourth bin is the absence of a lean - no score over +1/2 SD - and it is the quiet
+  // openings (the three scores sum to -1.3 SD on average, 40% under the faction's par on all three; 42% win rate
+  // against 49-57 for the leanings), not the ones high on everything (the user, 2026-09-15)
+  const LEAN_LABELS = ['Aggressive', 'Greedy', 'Defensive', 'Passive'];
   const leanOf = po => { if (!po) return -1; let b = 3, m = .5; for (let i = 0; i < 3; i++) if (po[i] > m) { m = po[i]; b = i; } return b; };
   const READS = [
     // the plays
@@ -298,43 +397,43 @@ window.ZH_READY.then(function (Z) {
     // the opening
     ['open', 'lean', 'lean', 'Leaning', LEAN_LABELS, p => leanOf(p.po)],
     ['open', 'A', 'pA', 'Aggression score', SD, p => p.po ? sdIdx(p.po[0]) : -1],
-    ['open', 'A', 'first', 'First play time', ['< 1:30', '1:30\u20132:30', '2:30\u20133:30', 'later', 'none'], p => { const t = firstPlay(p); return t < 0 ? 4 : t < 90 ? 0 : t < 150 ? 1 : t < 210 ? 2 : 3; }],
-    ['open', 'A', 'plays', 'Plays', ['none', '1', '2', '3\u20134', '5+'], (p, g, by) => { const n = plays(p, by); return n === 0 ? 0 : n === 1 ? 1 : n === 2 ? 2 : n <= 4 ? 3 : 4; }],
-    ['open', 'A', 'down', 'Opponent structures taken down', cntBins(3, 'none'), (p, g, by) => cnt(downs(p, by), 3)],
+    ['open', 'A', 'first', 'First play time', num('time', [90, 150, 210], { none: 'none' }), p => firstPlay(p)],
+    ['open', 'A', 'plays', 'Plays', num('count', [1, 2, 3, 5], { zero: 'none' }), (p, g, by) => plays(p, by)],
+    ['open', 'A', 'down', 'Opponent structures taken down', cntNum(3), (p, g, by) => downs(p, by)],
     ['open', 'A', 'reach', 'Forward reach', ['back', 'own half', 'their half', 'their base'], (p, g, by) => { const a = reach(p, by); return a < 0 ? -1 : a < 25 ? 0 : a < 50 ? 1 : a < 75 ? 2 : 3; }],
     ['open', 'A', 'cc', 'Command center', ['kept', 'sold'], (p, g, by) => p.cs != null && p.cs <= by ? 1 : 0],
     ['open', 'G', 'pG', 'Greed score', SD, p => p.po ? sdIdx(p.po[1]) : -1],
     ['open', 'D', 'pD', 'Defence score', SD, p => p.po ? sdIdx(p.po[2]) : -1],
-    ['open', 'D', 'def', 'Defences at home', cntBins(3, 'none'), (p, g, by) => cnt(kindCount(p, K_DEF, by, 50), 3)],
-    ['open', 'army', 'prod', 'Production buildings', cntBins(4, 'none'), (p, g, by) => cnt(kindCount(p, K_PROD, by), 4)],
-    ['open', 'army', 'spend', 'Army spend', ['$0', '< 1k', '1\u20132k', '2\u20133k', '3\u20134.5k', '4.5k+'], (p, g, by) => { const v = army(p, by).sum; return v === 0 ? 0 : v < 1000 ? 1 : v < 2000 ? 2 : v < 3000 ? 3 : v < 4500 ? 4 : 5; }],
+    ['open', 'D', 'def', 'Defences at home', cntNum(3), (p, g, by) => kindCount(p, K_DEF, by, 50)],
+    ['open', 'army', 'prod', 'Production buildings', cntNum(4), (p, g, by) => kindCount(p, K_PROD, by)],
+    ['open', 'army', 'spend', 'Army spend', num('money', [1000, 2000, 3000, 4500], { zero: '$0' }), (p, g, by) => army(p, by).sum],
     // the eco
-    ['eco', 'clock', 'sup', 'Supplies', cntBins(4, 'none'), (p, g, by) => cnt(kindCount(p, K_SUP, by), 4)],
-    ['eco', 'clock', 'sup2', 'Second supply placed', ['< 1:00', '1:00\u20131:30', '1:30\u20132:00', '2:00\u20133:00', 'later or none'], p => { const t = nthKind(p, K_SUP, 2); return t < 0 ? 4 : t < 60 ? 0 : t < 90 ? 1 : t < 120 ? 2 : t < 180 ? 3 : 4; }],
+    ['eco', 'clock', 'sup', 'Supplies', cntNum(4), (p, g, by) => kindCount(p, K_SUP, by)],
+    ['eco', 'clock', 'sup2', 'Second supply placed', num('time', [60, 90, 120, 180], { none: 'not by 5:00' }), p => nthKind(p, K_SUP, 2)],
     // the third comes an eco phase later (median 2:20, half never by 5:00), so its bins are wider (the user, 2026-09-15)
-    ['eco', 'clock', 'sup3', 'Third supply placed', ['< 1:00', '1:00\u20132:00', '2:00\u20133:00', '3:00\u20134:00', '4:00\u20135:00', 'later or none'], p => { const t = nthKind(p, K_SUP, 3); return t < 0 ? 5 : t < 60 ? 0 : t < 120 ? 1 : t < 180 ? 2 : t < 240 ? 3 : 4; }],
-    ['eco', 'clock', 'gat', 'Gatherers', ['\u2264 2', '3\u20134', '5\u20136', '7\u20138', '9+'], (p, g, by) => { if (!p.gt) return -1; const v = p.gt[Math.min(p.gt.length - 1, Math.max(0, Math.round(by / 30) - 1))]; return v <= 2 ? 0 : v <= 4 ? 1 : v <= 6 ? 2 : v <= 8 ? 3 : 4; }],
+    ['eco', 'clock', 'sup3', 'Third supply placed', num('time', [60, 120, 180, 240], { none: 'not by 5:00' }), p => nthKind(p, K_SUP, 3)],
+    ['eco', 'clock', 'gat', 'Gatherers', num('count', [3, 5, 7, 9]), (p, g, by) => { if (!p.gt) return -1; return p.gt[Math.min(p.gt.length - 1, Math.max(0, Math.round(by / 30) - 1))]; }],
     // builders = dozers, or GLA workers (KindOf DOZER), those out of the command center only (a stash's are gatherers):
     // the total, the starting one plus those built by the pane's clock (bd counted the built ones alone, by 2:00, so a
     // 2-dozer opening read as 1 - the user, 2026-09-14; an export without bdt falls back to it); the bins reach GLA's
     // 5-9; the label says workers when the selection is GLA alone (the user: "it shouldn't say dozer for GLA")
-    ['eco', 'clock', 'bd', 'Dozers', ['1', '2', '3', '4', '5\u20136', '7\u20138', '9+'], (p, g, by) => { const bd = p.bd != null ? p.bd : p.dz; if (bd == null) return -1; const v = (p.bd0 == null ? 1 : p.bd0) + (p.bdt ? p.bdt.filter(t => t <= by).length : bd); return v <= 4 ? Math.max(0, v - 1) : v <= 6 ? 4 : v <= 8 ? 5 : 6; }],
-    ['eco', 'clock', 'oil', 'Derricks captured', cntBins(3, 'none'), (p, g, by) => cnt(p.oc ? p.oc[Math.min(p.oc.length - 1, Math.max(0, Math.round(by / 30) - 1))] : 0, 3)],
+    ['eco', 'clock', 'bd', 'Dozers', num('count', [1, 2, 3, 4, 5, 7, 9]), (p, g, by) => { const bd = p.bd != null ? p.bd : p.dz; if (bd == null) return -1; return (p.bd0 == null ? 1 : p.bd0) + (p.bdt ? p.bdt.filter(t => t <= by).length : bd); }],
+    ['eco', 'clock', 'oil', 'Derricks captured', cntNum(3), (p, g, by) => p.oc ? p.oc[Math.min(p.oc.length - 1, Math.max(0, Math.round(by / 30) - 1))] : 0],
     ['eco', 'clock', 'cu', 'Capture upgrade', ['not yet', 'bought'], (p, g, by) => p.cu != null && p.cu <= by ? 1 : 0],
-    ['eco', 'clock', 'eco$', 'Eco spend by 4:00', ['< 5k', '5\u20136k', '6\u20137k', '7\u20138k', '8\u201310k', '10k+'], p => { if (!p.d) return -1; const v = p.d[4] + p.d[5] + p.d[6] + p.d[7]; return v < 5000 ? 0 : v < 6000 ? 1 : v < 7000 ? 2 : v < 8000 ? 3 : v < 10000 ? 4 : 5; }],   // the median is $6.4k of a $10k start; the bins sit around it
-    ['eco', 'game', 'supG', 'Supplies, whole game', cntBins(5, 'none'), p => cnt(countIf(p.b, isSupply), 5)],
-    ['eco', 'game', 'gatG', 'Gatherers built, whole game', ['\u2264 2', '3\u20134', '5\u20136', '7\u20139', '10+'], p => { const v = countIf(p.u, isGatherer); return v <= 2 ? 0 : v <= 4 ? 1 : v <= 6 ? 2 : v <= 9 ? 3 : 4; }],
+    ['eco', 'clock', 'eco$', 'Eco spend by 4:00', num('money', [5000, 6000, 7000, 8000, 10000]), p => p.d ? p.d[4] + p.d[5] + p.d[6] + p.d[7] : -1],   // the median is $6.4k of a $10k start; the bins sit around it
+    ['eco', 'game', 'supG', 'Supplies, whole game', cntNum(5), p => countIf(p.b, isSupply)],
+    ['eco', 'game', 'gatG', 'Gatherers built, whole game', num('count', [3, 5, 7, 10]), p => countIf(p.u, isGatherer)],
     // the unit mix
     ['umix', 'clock', 'main', 'Main class', [...CLS3, 'no army'], (p, g, by) => { const a = army(p, by); return a.sum ? a.main : 3; }],
     ['umix', 'clock', 'mainU', 'Main unit', null, (p, g, by) => army(p, by).top],
     ['umix', 'clock', 'inf', 'Infantry share', SHARE, (p, g, by) => { const a = army(p, by); return a.sum ? shareIdx(a.c[0] / a.sum) : -1; }],
     ['umix', 'clock', 'veh', 'Vehicle share', SHARE, (p, g, by) => { const a = army(p, by); return a.sum ? shareIdx(a.c[1] / a.sum) : -1; }],
     ['umix', 'clock', 'air', 'Aircraft share', SHARE, (p, g, by) => { const a = army(p, by); return a.sum ? shareIdx(a.c[2] / a.sum) : -1; }],
-    ['umix', 'clock', 'kinds', 'Unit kinds', cntBins(5, 'none'), (p, g, by) => cnt(army(p, by).kinds, 5)],
+    ['umix', 'clock', 'kinds', 'Unit kinds', cntNum(5), (p, g, by) => army(p, by).kinds],
     ['umix', 'game', 'mainG', 'Main unit, whole game', null, p => armyGame(p).top],
     ['umix', 'game', 'clsG', 'Main class, whole game', [...CLS3, 'no army'], p => { const a = armyGame(p); return a.sum ? a.main : 3; }],
     ['umix', 'game', 'airG', 'Any aircraft, whole game', ['none', 'some'], p => armyGame(p).c[2] ? 1 : 0],
-    ['umix', 'game', 'kindsG', 'Unit kinds, whole game', ['\u2264 3', '4\u20135', '6\u20137', '8\u20139', '10+'], p => { const v = armyGame(p).kinds; return v <= 3 ? 0 : v <= 5 ? 1 : v <= 7 ? 2 : v <= 9 ? 3 : 4; }],
+    ['umix', 'game', 'kindsG', 'Unit kinds, whole game', num('count', [4, 6, 8, 10]), p => armyGame(p).kinds],
   ];
   const PANE = { open: { el: 'open', note: 'open-note', by: 'oby', ord: 'oord', groups: { lean: '', A: 'Aggression', G: 'Greed', D: 'Defence', army: 'Army' } },
     eco: { el: 'eco', note: 'eco-note', by: 'eby', ord: 'eord', groups: { clock: 'By the clock', game: 'Whole game' } },
@@ -367,19 +466,20 @@ window.ZH_READY.then(function (Z) {
   }
   const army = (p, by) => { const a = p._ar || (p._ar = {}); return a[by] || (a[by] = tallyArmy(f => { const ul = p.ul; if (ul) for (let j = 0; j < ul.length; j += 2) { if (ul[j + 1] > by) break; f(ul[j], 1); } })); };   // out of production by the clock
   const armyGame = p => p._ag || (p._ag = tallyArmy(f => { const u = p.u; if (u) for (let j = 0; j < u.length; j += 2) f(u[j], u[j + 1]); }));   // the whole game's counts
-  const MULTI = READS.map(r => !!r[6]);
+  const MULTI = READS.map(r => !!r[6]), NUM = READS.map(r => r[4] && typeof r[4] === 'object' && !Array.isArray(r[4]) ? r[4] : null), RKEY = new Map(READS.map((r, i) => [r[0] + '/' + r[2], i]));
   const LEAN_INDEX = READS.findIndex(r => r[0] === 'open' && r[2] === 'lean');
   let READ_MERGE = PL.sameKey();   // the Naming switch, and whether Arms Dealer reads War Factory (see plays.js)
   function readValues(p, g, by) {   // the seat's value per read, cached per naming and clock: an int, or -2 with the array in .m
     const ops = p._op || (p._op = []), cache = ops[PL.SID] || (ops[PL.SID] = {});
     let b = cache[by]; if (b) return b;
     b = cache[by] = new Int32Array(READS.length); b.m = [];
-    for (let i = 0; i < READS.length; i++) { const v = READS[i][5](p, g, by); if (MULTI[i]) { b[i] = -2; b.m[i] = v; } else b[i] = v; }
+    for (let i = 0; i < READS.length; i++) { const v = READS[i][5](p, g, by); if (MULTI[i]) { b[i] = -2; b.m[i] = v; } else b[i] = NUM[i] ? numSlot(NUM[i], v) : v; }
     return b;
   }
   function readsFresh() {   // the play names follow the naming (the Naming switch, and a side filter flipping sameOn()):
     // the plays module and the seats' read values keep a store per naming (p._op[SID]), so a flip back costs nothing;
     // the play ids accumulate across namings (a name keeps its id); the army tallies (_ar/_ag) are template indices, naming-free
+    bStamps();
     const k = PL.sameKey(); if (READ_MERGE === k) return;
     READ_MERGE = k; PL.reset();
   }
@@ -392,12 +492,16 @@ window.ZH_READY.then(function (Z) {
   // the last few aggregations by their inputs - the mask, the panes' clocks, the naming: a filter toggled off is
   // back to the one before it, a clock switched back too, at no pass over the seats
   const AGG = new Map();
-  const aggKey = () => [Z.maskKey(), S.oby, S.eby, S.uby, S.pby, PL.sameKey(), READS_ON].join('|');
+  const aggKey = () => [Z.maskKey(), S.oby, S.eby, S.uby, S.pby, S.bby, S.bparts.join(','), PL.sameKey(), READS_ON].join('|');
   function aggregate() {
     readsFresh();
     return Z.memo(AGG, aggKey(), aggregateOf, 8);
   }
-  function aggregateOf() {
+  // the pass as a stepper: begin() allocates the tallies, step(g, si) folds one game's seats (si = its first seat),
+  // done() turns them into what the cards read. aggregateOf runs it in one block; a memo miss on a big library runs
+  // it in slices (render), the seats it finds cold read and described as it goes
+  function aggregateOf() { const A = aggBegin(); let si = 0; for (const g of D.games) { A.step(g, si); si += g.p.length; } return A.done(); }
+  function aggBegin() {
     const n = { games: 0, wins: 0, rated: 0, ratedWins: 0, exp: 0, winLen: null, lossLen: null };
     const bump = (m, k, w) => { const c = m.get(k) || [0, 0]; c[0]++; c[1] += w; m.set(k, c); };
     // the per-seat tallies land in typed arrays (a string key and a Map per seat was most of the pass) and
@@ -412,11 +516,11 @@ window.ZH_READY.then(function (Z) {
     const tally = (i, k, w) => { let a = readsA[i]; if (k * 2 + 1 >= a.length) { const b = new Uint32Array(Math.max(a.length * 2, k * 2 + 2)); b.set(a); a = readsA[i] = b; } a[k * 2]++; a[k * 2 + 1] += w; };
     const leanA = new Uint32Array(4 * 4 * 2);   // own Leaning x opponent's Leaning -> [games, wins], at the Opening Play clock (S.oby)
     const timA = TIMING.map(T => new Uint32Array(T.n * T_NB * 2));   // [ordinal * T_NB + 10 s bin] -> games, wins
+    let bldA = new Uint32Array(1024);   // build id -> games, wins
     const M = Z.mask(), need = Z.M_SEAT | Z.M_POP | Z.M_FACET;   // a word of filter bits per seat, in this same order; the mask already needs a decided seat (bind opts.only)
     // game lengths in typed arrays (a numeric sort, not a comparator one); the class set and captured flag as bits
     const winLen = new Float64Array(M.length), lossLen = new Float64Array(M.length); let nw = 0, nl = 0;
-    let si = 0;
-    for (const g of D.games) {
+    function step(g, si) {
       for (let i = 0; i < g.p.length; i++) {
         const m = M[si++], p = g.p[i];
         if ((m & need) !== need) continue;
@@ -437,6 +541,7 @@ window.ZH_READY.then(function (Z) {
         }
         { const c = lenIdx(g.t) * 2; lenA[c]++; lenA[c + 1] += w; }
         bump(byCash, Z.cashKey(g), w);
+        if (READS_ON) { const id = buildId(p, g); if (id >= 0) { if (id * 2 + 1 >= bldA.length) { const b = new Uint32Array(Math.max(bldA.length * 2, id * 2 + 2)); b.set(bldA); bldA = b; } bldA[id * 2]++; bldA[id * 2 + 1] += w; } }
         if (READS_ON) for (let c = 0; c < TIMING.length; c++) {
           const T = TIMING[c], ts = T.at(p), a = timA[c];
           for (let k = 0; k < T.n; k++) { const t = k < ts.length ? ts[k] : -1, o = (k * T_NB + (t < 0 || t >= T_END ? T_NB - 1 : (t / T_RES) | 0)) * 2; a[o]++; a[o + 1] += w; }
@@ -451,14 +556,18 @@ window.ZH_READY.then(function (Z) {
         }
       }
     }
-    n.winLen = winLen.slice(0, nw).sort(); n.lossLen = lossLen.slice(0, nl).sort();   // typed arrays sort numerically
-    const reads = readsA.map(a => { const m = new Map(); for (let k = 0; k * 2 < a.length; k++) if (a[k * 2]) m.set(k, [a[k * 2], a[k * 2 + 1]]); return m; });
-    const cell = new Map(), byElo = new Map(), byOppElo = new Map(), byGap = new Map(), byLen = new Map();
-    for (let f = 0; f < NF; f++) for (let o = 0; o < NF; o++) { const c = (f * NF + o) * 2; if (cellA[c]) cell.set(f + ':' + (o === X ? 'x' : o === ANY ? 'any' : o), [cellA[c], cellA[c + 1]]); }
-    for (let i = -1; i < Z.ELO.length; i++) { const c = (i + 1) * 2; if (eloA[c]) byElo.set(Z.eloId(i), [eloA[c], eloA[c + 1]]); if (oppEloA[c]) byOppElo.set(Z.eloId(i), [oppEloA[c], oppEloA[c + 1]]); }
-    GAP.forEach((b, i) => { if (gapA[i * 2]) byGap.set(b[0], [gapA[i * 2], gapA[i * 2 + 1]]); });
-    LEN.forEach((b, i) => { if (lenA[i * 2]) byLen.set(b[0], [lenA[i * 2], lenA[i * 2 + 1]]); });
-    return { n, cell, byElo, byOppElo, byGap, byLen, byCash, reads, leanMx: leanA, timing: timA };
+    function done() {
+      n.winLen = winLen.slice(0, nw).sort(); n.lossLen = lossLen.slice(0, nl).sort();   // typed arrays sort numerically
+      const reads = readsA.map(a => { const m = new Map(); for (let k = 0; k * 2 < a.length; k++) if (a[k * 2]) m.set(k, [a[k * 2], a[k * 2 + 1]]); return m; });
+      const cell = new Map(), byElo = new Map(), byOppElo = new Map(), byGap = new Map(), byLen = new Map();
+      for (let f = 0; f < NF; f++) for (let o = 0; o < NF; o++) { const c = (f * NF + o) * 2; if (cellA[c]) cell.set(f + ':' + (o === X ? 'x' : o === ANY ? 'any' : o), [cellA[c], cellA[c + 1]]); }
+      for (let i = -1; i < Z.ELO.length; i++) { const c = (i + 1) * 2; if (eloA[c]) byElo.set(Z.eloId(i), [eloA[c], eloA[c + 1]]); if (oppEloA[c]) byOppElo.set(Z.eloId(i), [oppEloA[c], oppEloA[c + 1]]); }
+      GAP.forEach((b, i) => { if (gapA[i * 2]) byGap.set(b[0], [gapA[i * 2], gapA[i * 2 + 1]]); });
+      LEN.forEach((b, i) => { if (lenA[i * 2]) byLen.set(b[0], [lenA[i * 2], lenA[i * 2 + 1]]); });
+      const builds = new Map(); for (let id = 0; id * 2 < bldA.length; id++) if (bldA[id * 2]) builds.set(id, [bldA[id * 2], bldA[id * 2 + 1]]);
+      return { n, cell, byElo, byOppElo, byGap, byLen, byCash, reads, leanMx: leanA, timing: timA, builds };
+    }
+    return { step, done };
   }
 
   // --- tiles ------------------------------------------------------------------
@@ -533,17 +642,18 @@ window.ZH_READY.then(function (Z) {
   }
 
   // --- small multiples -----------------------------------------------------------
-  function facet(title, bins, m, keyLabel) {
+  function facet(title, bins, m, keyLabel, xp) {   // keyLabel(key, l) -> the row's label as html (the builds' chips); xp: a numeric read's top bin opens on a click (data-xp), when it can
     const list = bins.filter(([k]) => m.has(k));
     if (!list.length) return '';
-    const overall = [...m.values()].reduce((s, v) => s + v[0], 0);
-    return `<div class="facet"><div class="lbl">${title}</div><div class="wr ax"><div class="k"></div><div class="t"><span class="lo"><i class="arr">\u25c0</i> loses</span><span>50%</span><span class="hi">wins <i class="arr">\u25b6</i></span></div><div class="v"></div></div><div class="rows">${list.map(([k, l]) => {
-      const [g, w] = m.get(k); const wr = g ? w / g : 0; const [lo, hi] = wilson(w, g);
-      const x = v => Math.max(0, Math.min(100, v * 100));
-      return `<div class="wr ${g < 30 ? 'faint' : ''}" title="${fmtInt(w)} of ${fmtInt(g)} games">
-        <div class="k">${esc(keyLabel ? keyLabel(k, l) : l)}</div>
+    return `<div class="facet"><div class="lbl">${title}</div><div class="wr ax"><div class="k"></div><div class="t"><span class="lo"><i class="arr">\u25c0</i> loses</span><span>50%</span><span class="hi">wins <i class="arr">\u25b6</i></span></div><div class="v"></div></div><div class="rows">${list.map(([k, l]) => facetRow(k, l, m.get(k), keyLabel, xp)).join('')}</div></div>`;
+  }
+  function facetRow(k, l, [g, w], keyLabel, xp) {
+    const wr = g ? w / g : 0, [lo, hi] = wilson(w, g);
+    const x = v => Math.max(0, Math.min(100, v * 100));
+    return `<div class="wr ${g < 30 ? 'faint' : ''}" title="${fmtInt(w)} of ${fmtInt(g)} games">
+        <div class="k">${xp && xp.more && k === xp.top ? `<button class="xp" data-xp="${xp.key}" title="split this bin">${esc(l)} <i>\u25b8</i></button>` : keyLabel ? keyLabel(k, l) : esc(l)}</div>
         <div class="t"><div class="b ${wr < .5 ? 'lo' : ''}" style="left:${Math.min(50, x(wr))}%;width:${Math.abs(x(wr) - 50)}%"></div><div class="ci" style="left:${x(lo)}%;width:${x(hi) - x(lo)}%"></div></div>
-        <div class="v">${fmtPct1(wr)}<small>${fmtInt(g)}</small></div></div>`; }).join('')}</div></div>`;
+        <div class="v">${fmtPct1(wr)}<small>${fmtInt(g)}</small></div></div>`;
   }
   // Leaning vs Their Leaning: not just how a leaning does on its own, but against each of the others -
   // reuses the matchup heatmap's look (shade, an Any column) at a fixed 4x4, own row vs opponent column
@@ -575,7 +685,15 @@ window.ZH_READY.then(function (Z) {
     const rows = READS.map((r, i) => {
       if (r[0] !== pane) return null;
       const raw = a.reads[i]; let bins, m;
+      let xp = null;
       if (Array.isArray(r[4])) { bins = r[4].map((l, b) => [String(b), l]); m = new Map([...raw].map(([k, v]) => [String(k), v])); }
+      else if (NUM[i]) {   // the slots summed into the bins the edges cut (the defaults, or this facet's own)
+        const sc = NUM[i], key = r[0] + '/' + r[2], edges = numEdges(sc, key), nb = numBins(sc, edges); m = new Map();
+        for (const [k, , lo, hi] of nb) { let g = 0, w = 0; for (let sl = lo; sl < hi; sl++) { const v = raw.get(sl); if (v) { g += v[0]; w += v[1]; } } if (g) m.set(k, [g, w]); }
+        bins = nb.map(([k, l]) => [k, l]);
+        const top = nb[nb.length - (sc.none ? 2 : 1)][0];
+        xp = { key, top, own: edges !== sc.edges, more: numExpand(sc, key).length > edges.length };
+      }
       else {   // a name per bin (a template merged by the Naming switch, or a play): the top ones by games, the rest folded into other
         m = new Map(); const name = new Map();
         if (r[4] === 'play') for (const [id, v] of raw) { m.set(String(id), v); name.set(String(id), PLAY_NAME[id]); }
@@ -584,11 +702,11 @@ window.ZH_READY.then(function (Z) {
         if (top.length > top_n) { const o = [0, 0]; for (const [k, v] of top.slice(top_n)) { o[0] += v[0]; o[1] += v[1]; m.delete(k); } m.set('\u0001other', o); bins.push(['\u0001other', 'other']); }
       }
       const solid = [...m.values()].filter(v => v[0] >= MIN_READ), wrs = solid.map(v => v[1] / v[0]);
-      return { r, bins, m, spread: wrs.length > 1 ? Math.max(...wrs) - Math.min(...wrs) : 0, solid: solid.length };
+      return { r, bins, m, xp, spread: wrs.length > 1 ? Math.max(...wrs) - Math.min(...wrs) : 0, solid: solid.length };
     }).filter(x => x && x.m.size);
     if (!rows.length) { $(P.el).innerHTML = '<div class="empty">No games with a recorded result match these filters.</div>'; $(P.note).textContent = ''; return; }
     const builderLabel = () => { const sides = new Set(F.facs.map(id => D.factions[id].side)); const gla = sides.has('GLA'), other = [...sides].some(sd => sd !== 'GLA') || !sides.size; const old = D.games.some(g => g.p.some(p => (p.bd != null || p.dz != null) && !p.bdt)); return `<span title="the starting ${gla && !other ? 'worker' : 'dozer'} plus those built at the command center${old ? ' by 2:00 (this export counts them to 2:00 whatever the clock)' : ''}${other ? ' (GLA: workers out of the command center; those from a supply stash are gatherers)' : ''}">${gla && !other ? 'Workers' : gla ? 'Dozers / workers' : 'Dozers'}${old ? ' by 2:00' : ''}</span>`; };
-    const one = x => facet(`${x.r[2] === 'bd' ? builderLabel() : esc(x.r[3])}${x.solid > 1 ? `<small class="sp" title="the widest gap in win rate between two bins with ${MIN_READ}+ games">${Math.round(x.spread * 100)} pts apart</small>` : ''}`, x.bins, x.m);
+    const one = x => facet(`${x.r[2] === 'bd' ? builderLabel() : esc(x.r[3])}${x.solid > 1 ? `<small class="sp" title="the widest gap in win rate between two bins with ${MIN_READ}+ games">${Math.round(x.spread * 100)} pts apart</small>` : ''}${x.xp ? `<button class="xb" data-xe="${x.xp.key}" title="type the bins' edges">bins</button>${x.xp.own ? `<button class="xb" data-xc="${x.xp.key}" title="the default bins">reset</button>` : ''}` : ''}`, x.bins, x.m, null, x.xp);
     let html = '';
     if (S[P.ord] === 'spread') html = `<div class="facets">${rows.slice().sort((x, y) => y.spread - x.spread).map(one).join('')}</div>`;
     else { const groups = []; for (const x of rows) { const g = groups[groups.length - 1]; if (g && g.k === x.r[1]) g.rows.push(x); else groups.push({ k: x.r[1], rows: [x] }); }
@@ -641,6 +759,52 @@ window.ZH_READY.then(function (Z) {
         <tr><th class="l">Win Rate</th><td>${g ? fmtPct1(w / g) : '\u2014'}</td></tr><tr><th class="l">95% Interval</th><td>${g ? `${fmtPct1(lo)}\u2013${fmtPct1(hi)}` : '\u2014'}</td></tr></table>`;
     });
   }
+  // --- win rate by build order --------------------------------------------------------------------------------
+  // the builds keyed as the Build orders tab keys them, most player-games first, the rest as other; a row's label is
+  // the build's chips (worded from one seat that has it, under the current naming)
+  // the top rows, then "show more" adds a page under them (the rest folded into one row after the last shown) and
+  // the list scrolls; the page count is kept across clicks until "top 12" folds it back (the user, 2026-09-16)
+  const B_TOP = 12, B_MORE = 50;
+  let B_N = B_TOP, BO = null;   // rows shown; the list drawn, for "show more" to extend without a render: {top, N, label, at}
+  function renderBuilds(a) {
+    seg($('bby'), [[120, '2:00'], [180, '3:00'], [240, '4:00'], [300, '5:00']].map(([v, l]) => [String(v), l]), String(S.bby), 'data-bby');
+    $('bparts').innerHTML = BD.PARTS.map(([k, l, c]) => `<button class="chip" aria-pressed="${bOn(k)}" data-bpart="${k}" style="--c:var(${c})"><span class="sw"></span><span>${esc(l)}</span></button>`).join('');
+    seg($('bsort'), [['games', 'Most played'], ['wr', 'Win rate']], S.bsort, 'data-bsort');
+    $('clock-bby').textContent = 'by ' + CLK(S.bby);
+    BO = null;
+    if (!READS_ON) { $('bo').innerHTML = `<div class="empty reading">${Z.progressHTML(readsNote(), readsAt)}</div>`; $('bo-note').textContent = ''; return; }
+    if (!S.bparts.length) { $('bo').innerHTML = '<div class="empty">Pick at least one part to describe by.</div>'; $('bo-note').textContent = ''; return; }
+    // by games, or by win rate among the builds with MIN_READ games (one game wins 100% or 0%), the thinner ones
+    // after by games - each order once per aggregation (100k builds)
+    const wr = S.bsort === 'wr', top = a.btop || (a.btop = [...a.builds].sort((x, y) => y[1][0] - x[1][0]));
+    const list = !wr ? top : a.bwr || (a.bwr = [...top].sort(([, x], [, y]) => (y[0] >= MIN_READ) - (x[0] >= MIN_READ) || (x[0] >= MIN_READ ? y[1] / y[0] - x[1] / x[0] || y[0] - x[0] : y[0] - x[0])));
+    if (!top.length) { $('bo').innerHTML = '<div class="empty">No games with a recorded result match these filters.</div>'; $('bo-note').textContent = ''; return; }
+    const N = top.reduce((s, [, v]) => s + v[0], 0), shown = list.slice(0, B_N), m = new Map(shown.map(([id, v]) => [String(id), v]));
+    const chipsOf = id => { const [p, g] = BREP[id]; return BD.chipsOf(buildDesc(p, g), bSide(p), bOn, true); };
+    const bins = shown.map(([id]) => [String(id), id]);
+    const label = (k, id) => id < 0 ? `<span class="items"><span class="it none"><i></i>every other build</span></span>` : `<span class="items">${chipsOf(id).map(it => `<span class="it${it.none ? ' none' : ''}${it.part === 'units' ? ' army' : ''}" style="--c:${it.c}"><i></i>${esc(BD.cap(it.n))}</span>`).join('')}</span>`;
+    $('bo').innerHTML = `<div class="facets" style="grid-template-columns: 1fr">${facet(`Builds<small class="sp">${fmtInt(top.length)} distinct, the most played ${fmtPct(top[0][1][0] / N)} of ${fmtInt(N)} player-games</small>`, bins, m, label)}</div>`;
+    BO = { top: list, label, at: shown.length };
+    buildsTail();
+    $('bo-note').textContent = `bars from 50%: right wins, left loses; whiskers are 95% intervals, faint under ${MIN_READ} games; the count is the build\u2019s player-games \u00b7 the builds ${wr ? `by win rate among those with ${MIN_READ}+ games, the thinner ones after by games` : 'by games, most first'}, the rest folded into one row - show more adds ${B_MORE} at a time and the list scrolls \u00b7 a build is described as on the Build orders tab by the clock in the title: the builders out of the command center, the supplies before any play left, the gatherers, the opening group (what the starting cash bought) then each later structure, expansion or play in order, and the army\u2019s mix; switch parts off for coarser builds \u00b7 correlation, not cause`;
+  }
+  // the list's tail: the rest as one row, then the show more / top 12 controls - redrawn as pages are added
+  function buildsTail() {
+    const rows = $('bo').querySelector('.rows'), { top, label, at } = BO, left = top.length - at;
+    rows.querySelectorAll('.other, .bmore').forEach(el => el.remove());
+    let html = '';
+    if (left) { const o = [0, 0]; for (let i = at; i < top.length; i++) { o[0] += top[i][1][0]; o[1] += top[i][1][1]; } html += facetRow('other', -1, o, label).replace('class="wr ', 'class="wr other '); }
+    if (left || at > B_TOP) html += `<div class="bmore">${left ? `<button data-bmore="1">show ${fmtInt(Math.min(B_MORE, left))} more</button><span>${fmtInt(left)} more build${left === 1 ? '' : 's'}</span>` : ''}${at > B_TOP ? `<button data-bless="1">top ${B_TOP}</button>` : ''}</div>`;
+    rows.insertAdjacentHTML('beforeend', html);
+    $('bo').classList.toggle('long', at > B_TOP);
+  }
+  $('bo').addEventListener('click', e => {
+    const b = e.target.closest('[data-bmore], [data-bless]'); if (!b || !BO) return;
+    const rows = $('bo').querySelector('.rows');
+    if (b.dataset.bless) { B_N = B_TOP; BO.at = B_TOP; rows.querySelectorAll('.wr:not(.ax):not(.other)').forEach((el, i) => { if (i >= B_TOP) el.remove(); }); rows.scrollTop = 0; }
+    else { const next = BO.top.slice(BO.at, BO.at + B_MORE); BO.at += next.length; B_N = BO.at; rows.querySelector('.other, .bmore').insertAdjacentHTML('beforebegin', next.map(([id, v]) => facetRow(String(id), id, v, BO.label)).join('')); }
+    buildsTail();
+  });
   function renderFacets(a) {
     const eloBins = ELO.map(([k, l]) => [k, l]).concat([['none', 'unrated']]);
     const cashBins = CASH.map(([v]) => [String(v), fmtCash(v)]).concat([['other', 'other']]);
@@ -737,7 +901,7 @@ window.ZH_READY.then(function (Z) {
   const RIDX = (pane, key) => READS.findIndex(r => r[0] === pane && r[2] === key);
   const TIME_BINS = ['< 0:45', '0:45\u20131:00', '1:00\u20131:30', '1:30 to the clock', 'not by the clock'], timeBin = (t, by) => t < 0 || t > by ? 4 : t < 45 ? 0 : t < 60 ? 1 : t < 90 ? 2 : 3;
   const placedBy = (p, by) => { const pz = p.pz, out = []; if (pz) for (let j = 0; j < pz.length; j += 4) if (pz[j + 1] <= by && pz[j + 3] !== K_CC && pz[j + 3] !== K_CAPT) out.push([pz[j + 1], pz[j]]); return out.sort((a, b) => a[0] - b[0]); };
-  const boCount = (p, code, by, arg) => { const bo = p.bo; let n = 0; if (bo) for (let j = 0; j < bo.length; j += 3) if (bo[j] === code && bo[j + 2] <= by && (arg == null || bo[j + 1] === arg)) n++; return n; };
+  const boCount = (p, code, by, arg) => { const bo = p.bo, bx = p.bx; let n = 0; if (bo) for (let j = 0; j < bo.length; j += 3) if (bo[j] === code && bo[j + 2] <= by && (arg == null || bo[j + 1] === arg) && !(bx && bx[j] === 4)) n++; return n; };   // bx 4 = refused: a second click on a science, an upgrade already in production (D.bo_status)
   const unitsBy = (p, by) => { const ul = p.ul; let n = 0; if (ul) for (let j = 0; j < ul.length; j += 2) { if (ul[j + 1] > by) break; n++; } return n; };
   const PNAME = new Map();   // a template's key under the naming -> its label (kept as the rows are read)
   const tpl = ti => { if (ti == null || ti < 0) return -1; const t = D.templates[ti], k = Z.keyOf(t); if (!PNAME.has(k)) PNAME.set(k, F.merge === 'all' ? t.n : t.m); return k; };
@@ -803,7 +967,7 @@ window.ZH_READY.then(function (Z) {
   const predValue = (f, p, o, g, by) => {
     if (f.kind === 'num') return f.fn(p, o, g, by);
     let v;
-    if (f.read) { const r = readValues(p, g, by); v = r[f.ri] === -2 ? r.m[f.ri] : r[f.ri]; } else v = f.fn(p, g, by);
+    if (f.read) { const r = readValues(p, g, by); v = r[f.ri] === -2 ? r.m[f.ri] : NUM[f.ri] && r[f.ri] >= 0 ? numBinOf(NUM[f.ri], r[f.ri]) : r[f.ri]; } else v = f.fn(p, g, by);
     return f.map && v != null && !Array.isArray(v) ? f.map(v) : v;
   };
   // a seat's categorical values, kept per naming and clock (as readValues): a filter change costs the rows alone
@@ -1060,16 +1224,23 @@ window.ZH_READY.then(function (Z) {
   let readsAt = 0, readsPhase = 'load';
   const readsNote = () => readsPhase === 'load' ? 'loading the opening data\u2026' : 'reading the openings of the selection\u2026';
   const readsTell = () => { const t = readsNote(); document.querySelectorAll('.reading').forEach(el => Z.progressSet(el, t, readsAt)); };
-  // the seats the pass would read for the panes' clocks and have not been (their values are kept per clock): the
-  // pass over the whole library is ~3 s, so past a few thousand it runs in slices behind the strip rather than in
-  // one block on the click (the user, 2026-09-14: a clock switched, a filter off - slow)
-  const COLD_MIN = 4000;
-  function coldSeats(M, need, clockSet) {
+  // the pass over the seats, on a memo miss: over the whole library it is seconds (a describe is ~12 us, a read
+  // ~10, a re-key from the pack ~1, a tally ~1), so past a cost it runs in slices behind the strip rather than in
+  // one block on the click (the user, 2026-09-14: a clock switched, a filter off - slow). The slices ARE the
+  // aggregation: the stepper (aggBegin) folds each game as it goes, reading and describing the seats it finds
+  // cold, and its result lands in the memo - nothing is left for a block after the strip (the user, 2026-09-16:
+  // a parts toggle on 138k games froze the page - every seat described again, then 0.6 s of tallies in one block).
+  // passCost: the pass's cost before it runs, in warm seats - 1 for one whose values are in, 3 to re-key from its
+  // pack, 10 to read or describe; past PASS_MIN it is sliced
+  const PASS_MIN = 50000;
+  function passCost(M, need, clockSet) {
     let si = 0, n = 0;
     for (const g of D.games) for (let i = 0; i < g.p.length; i++, si++) {
       if ((M[si] & need) !== need) continue;
-      const ops = g.p[i]._op, c = ops && ops[PL.SID];
-      for (const by of clockSet) if (!c || !c[by]) { n++; break; }
+      const p = g.p[i], ops = p._op, c = ops && ops[PL.SID];
+      let cold = buildCold(p);
+      if (!cold) for (const by of clockSet) if (!c || !c[by]) { cold = true; break; }
+      n += cold ? 10 : p.pz && !(p._bi && p._bi.s === B_ST) ? 3 : 1;
     }
     return n;
   }
@@ -1081,15 +1252,15 @@ window.ZH_READY.then(function (Z) {
     if (READS_ON && !AGG.has(aggKey())) {   // an aggregation not in the memo: the seats it reads may be cold
       readsFresh();
       const M = Z.mask(), need = Z.M_SEAT | Z.M_POP | Z.M_FACET | Z.M_MATCH, clockSet = [...new Set(READS.map(r => S[PANE[r[0]].by]))];
-      const cold = coldSeats(M, need, clockSet);
-      if (cold >= COLD_MIN) {
+      if (M.length >= PASS_MIN * 4 || passCost(M, need, clockSet) >= PASS_MIN) {   // a big library: every pass, warm or not, is past it (the count alone is 150 ms on 277k seats)
         readsPhase = 'read'; readsAt = 0; readsTell();
-        Z.working(`reading the openings of ${fmtInt(cold)} player-games\u2026`);
+        Z.working('reading the openings of the selection\u2026');
         const games = D.games, starts = new Int32Array(games.length + 1);   // the first seat of each game
         for (let i = 0; i < games.length; i++) starts[i + 1] = starts[i] + games[i].p.length;
+        const key = aggKey(), A = aggBegin();
         Z.chunked(games.length, (i0, i1) => {
-          for (let gi = i0; gi < i1; gi++) { const g = games[gi]; let si = starts[gi]; for (let i = 0; i < g.p.length; i++, si++) { if ((M[si] & need) !== need) continue; for (const by of clockSet) readValues(g.p[i], g, by); } }
-        }, { token: () => job === JOB, at: f => { readsAt = f; readsTell(); Z.workingAt(f); } }).then(ok => { if (!ok || job !== JOB) return; Z.working(null); renderNow(); });
+          for (let gi = i0; gi < i1; gi++) A.step(games[gi], starts[gi]);
+        }, { token: () => job === JOB, at: f => { readsAt = f; readsTell(); Z.workingAt(f); } }).then(ok => { if (!ok || job !== JOB) return; Z.working(null); Z.memo(AGG, key, A.done, 8); renderNow(); });
         return;
       }
     }
@@ -1098,8 +1269,9 @@ window.ZH_READY.then(function (Z) {
   let READS_DRAWN = false;
   function renderNow() {
     const a = aggregate();
-    renderTiles(a); renderHeatmap(a); renderFacets(a); /* renderPred(); */ renderReads('open', a); renderReads('eco', a); renderReads('umix', a); renderReads('play', a); renderCurve(a);
+    renderTiles(a); renderHeatmap(a); renderFacets(a); /* renderPred(); */ renderReads('open', a); renderReads('eco', a); renderReads('umix', a); renderReads('play', a); renderBuilds(a); renderCurve(a);
     if (READS_ON && !READS_DRAWN) { READS_DRAWN = true; if (window.performance && performance.mark) performance.mark('zh-reads'); }   // the read cards drawn for the first time
+    if (!HASH_DONE && location.hash) { HASH_DONE = true; const el = document.querySelector(location.hash); if (el) el.scrollIntoView({ block: 'start' }); }   // a link into a card (the build orders tab's arrow): the jump once the cards have their height
     Z.persistPage('zh-winrates-page', 2, S);
   }
   // the opening column lands after the first paint: then the reads switch on and the pass over the seats runs
@@ -1120,7 +1292,13 @@ window.ZH_READY.then(function (Z) {
   Z.bind(render, d => {
     // if (d.wall) { S.wall = d.wall; renderPred(); Z.persistPage('zh-winrates-page', 2, S); return false; }   // the fit is cached: no pass over the data
     if (d.hm) S.hm = d.hm;
+    // a facet's bins: the top one split further, the edges typed, or the defaults back (the read's key, pane/key)
+    else if (d.xp) { const sc = NUM[RKEY.get(d.xp)]; S.x = S.x || {}; S.x[d.xp] = numExpand(sc, d.xp); }
+    else if (d.xc) { if (S.x) delete S.x[d.xc]; }
+    else if (d.xe) { const sc = NUM[RKEY.get(d.xe)], e = numAsk(sc, d.xe); if (!e) return false; S.x = S.x || {}; if (e.length) S.x[d.xe] = e; else delete S.x[d.xe]; }
     // else if (d.wby) S.wby = +d.wby; else if (d.wgames) S.wgames = d.wgames;
+    else if (d.bby) S.bby = +d.bby; else if (d.bsort) S.bsort = d.bsort;
+    else if (d.bpart) S.bparts = bOn(d.bpart) ? S.bparts.filter(k => k !== d.bpart) : BD.PARTS.map(x => x[0]).filter(k => k === d.bpart || bOn(k));
     else if (d.oby) S.oby = +d.oby; else if (d.oord) S.oord = d.oord;
     else if (d.eby) S.eby = +d.eby; else if (d.eord) S.eord = d.eord;
     else if (d.uby) S.uby = +d.uby; else if (d.uord) S.uord = d.uord;

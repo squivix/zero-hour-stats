@@ -229,6 +229,7 @@ window.ZH_DATA = (async function () {
     } else fold(data, off, part, cut[shard]);
   }
   if (subset) { const { keep, take, ...rest } = subset; data.subset = rest; }
+  data.offs = offs;   // offs[i] = the first of shard i's games in data.games (a page fetching a game's time shard finds its shard by it)
   firstDone = true;
   if (window.performance && performance.mark) performance.mark('zh-data');   // parsed: performance.getEntriesByName('zh-data')
 

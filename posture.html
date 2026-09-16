@@ -196,6 +196,10 @@
       <div class="tbl-wrap" id="cmp-facs" style="margin-top:14px"></div>
       <div class="foot"><span id="cmp-note"></span></div>
     </section>
+
+    <section class="card xref">
+      <a class="xref" href="winrates.html#card-open">Win rates by opening posture &rarr;</a>
+    </section>
   </main>
 </div>
 <div id="tip" hidden></div>
@@ -327,8 +331,11 @@ window.ZH_READY.then(function (Z) {
   const RAMP = t => { t = Math.max(0, Math.min(1, t)); return t < .5 ? mix([.36, .55, .8], [.72, .72, .68], t * 2) : mix([.72, .72, .68], [.9, .38, .25], (t - .5) * 2); };   // blue - neutral - red
   const TW_LO = (() => { const v = Array.from(FW).filter(x => x > 0).sort((a, b) => a - b); return [v[Math.floor(v.length * .05)] || 0, v[Math.floor(v.length * .95)] || 1]; })();   // minutes to the win, 5th to 95th percentile of winners
   const SPENT_LO = (() => { const v = Array.from(SPENT).filter((x, si) => HAS[si]).sort((a, b) => a - b); return [v[Math.floor(v.length * .05)] || 0, v[Math.floor(v.length * .95)] || 1]; })();
-  const LEAN_GAP = 0.10;   // a seat leans to its largest score when its composition beats the next by this many points
-  function lean(si) { if (!HASTRI[si]) return -1; let best = -1, bv = -1, second = -1; for (let k = 0; k < 3; k++) { const v = TRI[si * 3 + k]; if (v > bv) { second = bv; bv = v; best = k; } else if (v > second) second = v; } return bv - second >= LEAN_GAP ? best : -1; }
+  // the leaning: the largest score when it is over LEAN_SD - the Win rates tab's and the help page's rule (it was a
+  // 10-point gap of the composition here, a different population: that put the seats high on everything in the
+  // grey bin). The rest are Passive: nothing stood out, and mostly under par on all three (the user, 2026-09-15)
+  const LEAN_SD = 0.5;
+  function lean(si) { if (!HASTRI[si]) return -1; let best = -1, bv = LEAN_SD; for (let k = 0; k < 3; k++) { const v = scoreOf(si, k); if (v > bv) { bv = v; best = k; } } return best; }
   function seatColor(si, mode) {
     if (mode === 'faction') return factionColor(FAC[si]);
     if (mode === 'side') return PAL.side[SIDE_OF(FAC[si])] || [.5, .5, .5];
@@ -358,7 +365,9 @@ window.ZH_READY.then(function (Z) {
   const PAL = { post: [], side: {}, neutral: [.5, .5, .48] };
   const NEUTRAL_DARK = [.5, .5, .48], NEUTRAL_LIGHT = [.62, .62, .58];
   function refreshPalette() { PAL.post = POST.map(P => hex(css(P[2]))); for (const s of SIDES) PAL.side[s] = hex(css(SIDE_COLOR[s])); PAL.neutral = document.documentElement.dataset.theme === 'light' ? NEUTRAL_LIGHT : NEUTRAL_DARK; }
-  // the mix: the three committed shares blend the three hues; nothing committed stays neutral
+  // the mix: the three committed shares blend the three hues; nothing committed stays neutral. (A grey-centred
+  // gradient for the leaning was tried and dropped, 2026-09-15: it reads as one gradual axis, but a point's colour
+  // moves on all three scores, so hovering along a line jumps - the flat bins are the honest picture.)
   function mixColor(si) {
     if (!HASTRI[si]) return PAL.neutral;
     let r = 0, g = 0, b = 0;
@@ -752,7 +761,7 @@ window.ZH_READY.then(function (Z) {
     const total = HAS.reduce((s, v) => s + v, 0);
     $('tiles').innerHTML = `
       <div class="tile"><div class="lbl">Seats</div><div class="v">${fmtInt(n)}</div><div class="d">openings of ${fmtInt(total)} scored to ${wlabel(WINDOW)} or the game's end</div></div>
-      <div class="tile"><div class="lbl">Opening leaning</div><table class="kv">${POST.map((P, k) => `<tr><th style="color:var(${P[2]})">${P[1]}</th><td class="m">${n ? fmtPct(leans[k + 1] / n) : '-'}</td></tr>`).join('')}<tr><th>Balanced</th><td class="m">${n ? fmtPct(leans[0] / n) : '-'}</td></tr></table><div class="d">the opening's largest score, by ${LEAN_GAP * 100}+ points of the composition</div></div>
+      <div class="tile"><div class="lbl">Opening leaning</div><table class="kv">${POST.map((P, k) => `<tr><th style="color:var(${P[2]})">${P[1]}</th><td class="m">${n ? fmtPct(leans[k + 1] / n) : '-'}</td></tr>`).join('')}<tr><th>Passive</th><td class="m">${n ? fmtPct(leans[0] / n) : '-'}</td></tr></table><div class="d">the largest score when it is over +\u00bd SD; Passive: none is</div></div>
       <div class="tile"><div class="lbl">Budget</div><div class="agd">${ALL4.map((P, k) => `<div style="--c:var(${P[2]})"><b>${pts(mean(k))}</b>${P[1]}<small style="display:block;color:var(--muted)">${spts(mean(k) - ref(k))}</small></div>`).join('')}</div><div class="d">share of the ${fmtMoney(spent)} spent per seat by ${wlabel(WINDOW)}, and the difference from the ${relWord()} average</div></div>
       <div class="tile"><div class="lbl">Win rate</div><div class="v">${nw ? fmtPct(w / nw) : '-'}</div><div class="d">${fmtInt(nw)} seats with a result</div></div>`;
   }
@@ -970,7 +979,7 @@ window.ZH_READY.then(function (Z) {
     if (mode === 'faction') return Object.entries(D.factions).filter(([id]) => HAS.some((h, si) => h && FAC[si] === +id)).map(([id, f]) => sw(rgb(factionColor(+id)), shortName(f), id)).join('');
     if (mode === 'side') return SIDES.map(s => sw(rgb(PAL.side[s]), s, s)).join('');
     if (mode === 'result') return sw('rgb(43,212,138)', 'won', 'won') + sw('rgb(255,107,61)', 'lost', 'lost') + sw('#7f7f7a', 'no result (faint)', 'none');
-    if (mode === 'lean') return POST.map(P => sw(`var(${P[2]})`, P[1], P[0])).join('') + sw('#8c8c88', UNSCORED[n] ? 'balanced or not scored' : 'balanced', 'bal');
+    if (mode === 'lean') return POST.map(P => sw(`var(${P[2]})`, P[1], P[0])).join('') + sw('#8c8c88', UNSCORED[n] ? 'passive or not scored' : 'passive', 'bal');
     if (mode === 'mix') return POST.map(P => sw(`var(${P[2]})`, P[1])).join('') + (UNSCORED[n] ? sw(rgb(PAL.neutral), 'not scored', 'unscored') : '') + '<span>(hues blend by the composition of the scores)</span>';
     if (mode === 'spend') return `<span>${fmtMoney(SPENT_LO[0])}<span class="grad" style="background:linear-gradient(90deg,${rgb(RAMP(0))},${rgb(RAMP(.5))},${rgb(RAMP(1))})"></span>${fmtMoney(SPENT_LO[1])} spent by ${wlabel(WINDOW)}</span>`;
     if (mode === 'fastwin') return `<span>won at ${mmss(TW_LO[0])}<span class="grad" style="background:linear-gradient(90deg,${rgb(RAMP(1))},${rgb(RAMP(.5))},${rgb(RAMP(0))})"></span>won at ${mmss(TW_LO[1])}</span>` + sw('#7f7f7a', 'lost or no result (faint)', 'nowin');

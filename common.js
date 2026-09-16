@@ -58,13 +58,13 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   const searchHit = (hay, q) => q.toLowerCase().split(/\s+/).filter(Boolean).every(w => hay.includes(w));
   const FACS = Object.entries(D.factions).map(([id, f]) => ({ id: +id, ...f }));
   const SOURCES = [...new Set(D.games.map(g => g.s))].sort();
-  const EVENTS = (D.events || []).map((name, id) => ({ id, name, games: 0 }));
+  // fam: the event's name with its year taken out, so an event's yearly runs sort as one family (the user, 2026-09-15)
+  const EVENTS = (D.events || []).map((name, id) => ({ id, name, games: 0, fam: name.replace(/\b(?:19|20)\d\d\b/g, '').replace(/\s+/g, ' ').trim().toLowerCase() }));
   for (const g of D.games) if (g.ev != null) EVENTS[g.ev].games++;
   // the lists are kept in name order; the rail sorts them by count with a stable sort, so ties fall back to the name without a
   // string compare per comparison (locale compares on 10k players per click were a visible share of it)
   const byName = (a, b) => a.name.localeCompare(b.name);
   EVENTS.sort(byName);
-  let evQuery = '';
   // maps are keyed by engine CRC in the export: one entry however the file was named
   const MAPS = (D.maps || []).map((m, id) => ({ id, name: m.n, crc: m.c, games: 0, info: (MI && MI.maps[m.c]) || {} }));
   for (const g of D.games) if (g.mp != null) MAPS[g.mp].games++;
@@ -125,12 +125,17 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   const facetCount = () => Object.values(mapFacet).reduce((n, v) => n + (v === true ? 1 : v.length || 0), 0);
   // resolved player identities (the curated layer's projection, never header names);
   // filters key on the identity id so they survive a re-export
-  const PLAYERS = (D.players || []).map((p, idx) => ({ idx, id: p.i, name: p.n, games: 0 }));
+  // a player's account keys ride along from the export (p.a: go = Strata id, gr = GameReplays member id,
+  // gt = GenTool uploader key) - shown on hover and searchable, so a rail name can be checked against the
+  // site it came from (the user, 2026-09-15)
+  const ACCOUNT_SITE = { go: 'Strata', gr: 'GameReplays', gt: 'GenTool' };
+  const accountsOf = p => Object.keys(ACCOUNT_SITE).filter(k => p.a && p.a[k] && p.a[k].length).map(k => ACCOUNT_SITE[k] + ' ' + p.a[k].join(', ')).join(' \u00b7 ');
+  const PLAYERS = (D.players || []).map((p, idx) => ({ idx, id: p.i, name: p.n, games: 0, accounts: accountsOf(p), ids: Object.values(p.a || {}).flat() }));
   for (const g of D.games) for (const p of g.p) if (p.pl != null) PLAYERS[p.pl].games++;
   PLAYERS.sort(byName);
   const PLAYER_BY_ID = new Map(PLAYERS.map(p => [p.id, p]));
   const pidOf = p => p.pl == null ? -1 : D.players[p.pl].i;
-  let plQuery = '', oplQuery = '';
+  let plQuery = '', oplQuery = '', whoQ = { p: [], f: [], e: ['', ''], t: null }, whoOpen = null, whoRefocus = false;   // the comboboxes' text, by list (p = player, f = faction, per finder; e = the event box) ; whoOpen = the list that is down, 'p:0' / 'f:1' / 'e:0'
   // games under 3 min are lag tests and quits, never counted (user, 2026-09-12: was 2). The slider runs from
   // that floor to the longest game in the data, rounded up to a half hour; the top
   // end means no upper bound.
@@ -146,9 +151,16 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   const cashOther = D.games.filter(g => !CASH.some(([v]) => v === g.c)).length;
   const cashKey = g => CASH.some(([v]) => v === g.c) ? String(g.c) : 'other';
   const FMTS = [...tally('k')].filter(([v]) => v != null).sort((a, b) => b[1] - a[1]);
+  // the game's type from its format label: "1v1", "FFA n" or a team shape ("2v2", "3v1")
+  const GTYPES = [['1v1', '1v1'], ['team', 'Team'], ['ffa', 'FFA']];
+  const gtypeOf = k => k == null ? null : k === '1v1' ? '1v1' : /^FFA/.test(k) ? 'ffa' : 'team';
 
+  const ELO_LO = 1100;   // the first bucket ends here; the rest run in hundreds (finer low buckets: the user, 2026-09-15)
   const ELO = [
-    ['u1400', '< 1400', e => e < 1400],
+    ['u1100', '< 1100', e => e < 1100],
+    ['1100', '1100s', e => e >= 1100 && e < 1200],
+    ['1200', '1200s', e => e >= 1200 && e < 1300],
+    ['1300', '1300s', e => e >= 1300 && e < 1400],
     ['1400', '1400s', e => e >= 1400 && e < 1500],
     ['1500', '1500s', e => e >= 1500 && e < 1600],
     ['1600', '1600s', e => e >= 1600 && e < 1700],
@@ -160,10 +172,13 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   const eloBucket = e => e == null ? 'none' : (ELO.find(b => b[2](e)) || ['none'])[0];
   const eloIdx = e => { if (e == null) return -1; for (let i = 0; i < ELO.length; i++) if (ELO[i][2](e)) return i; return -1; };   // index into ELO, -1 = none
   const eloId = i => i < 0 ? 'none' : ELO[i][0];
-  // Which rating counts as high level, and which GameReplays listings do.
+  // Which rating counts as high level, and which GameReplays events do: the main World Series only - the semi
+  // series, the prologue and the other tournaments are not the top bracket, and the expert / gold / silver / ROTW
+  // listings are posted for being exciting, not for their level (the user, 2026-09-15)
   const HIGH_ELO = 1600, LOW_ELO = 1300;
+  const WORLD_SERIES = /World Series/, NOT_MAIN = /semi|prologue/i;
   const highLevel = (p, g) => g.s === 'gamereplays'
-    ? g.ev != null && !/^listing: (member|silver)/.test(D.events[g.ev])
+    ? g.ev != null && WORLD_SERIES.test(D.events[g.ev]) && !NOT_MAIN.test(D.events[g.ev])
     : p.e != null && p.e >= HIGH_ELO;
   // low level is a rating under LOW_ELO (the band between is neither); GameReplays games are never low,
   // whatever the listing, and a seat with no rating is neither
@@ -178,12 +193,17 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   const FDEF = {
     facs: [], opp: [], sources: [], tmin: '', tmax: '', elo: [], oppElo: [], result: [], events: [], maps: [], players: [], oppPlayers: [],
     classes: ['infantry', 'vehicle', 'aircraft', 'economy', 'other'], level: 'all', cash: [], fmt: [], merge: 'smart',
+    dfrom: '', dto: '',   // the recorder's day, YYYY-MM-DD, either end open
+    gtype: null,   // the game type: '1v1' / 'team' / 'ffa', one or none; it sets the finder count (1v1 = two)
+    mirror: false,   // the Replays tab's mirror: every side fields the same factions (a 1v1 of one faction; a 2v2 of the same pair)
+    winner: null,   // the Replays tab's Winner: the finder (index) whose seat won, 'none' = no result on record, null = any
+    who: [],   // the Replays tab's Players panel: finders, each {p: player ids, f: faction ids} a seat of the game must match - any seat: the tab is symmetrical, nobody is labelled the opponent (the user, 2026-09-15)
     noncombat: false,   // hide units with no weapon that removes hit points (combat page)
   };
   // filters live for the browser tab (sessionStorage): a reload keeps them, a click on another page's link
   // clears them so every page opens blank (the user, 2026-09-14; before that a level preset kept coming back
   // on its own from localStorage); the page's own controls still persist
-  const PAGE = /winrates/.test(location.pathname) ? 'winrates' : /combat/.test(location.pathname) ? 'combat' : /buildorders/.test(location.pathname) ? 'buildorders' : /posture/.test(location.pathname) ? 'posture' : 'units';
+  const PAGE = /winrates/.test(location.pathname) ? 'winrates' : /combat/.test(location.pathname) ? 'combat' : /buildorders/.test(location.pathname) ? 'buildorders' : /posture/.test(location.pathname) ? 'posture' : /replay/.test(location.pathname) ? 'replay' : 'units';
   const FKEY = 'zh-filters-' + PAGE;
   // a page's own starting filters; posture began with USA vanilla picked (its Build Orders Space plot mixes
   // the factions' openings into one cloud) until the user asked for nothing picked (2026-09-14)
@@ -192,6 +212,9 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   try {
     for (const k of Object.keys(localStorage)) if (/^zh-filters(-|$)/.test(k)) localStorage.removeItem(k);   // the old cross-page store
     const saved = JSON.parse(sessionStorage.getItem(FKEY) || 'null'); if (saved && saved.v === 1) F = { ...FDEF, ...(PAGE_DEFAULTS[PAGE] || {}), ...saved.f };
+    // a saved "< 1400" from before the finer low buckets: the four that now cover it
+    const widen = a => Array.isArray(a) && a.includes('u1400') ? a.filter(k => k !== 'u1400').concat(['u1100', '1100', '1200', '1300']) : a;
+    F.elo = widen(F.elo); F.oppElo = widen(F.oppElo);
   } catch (e) { /* no storage */ }
   function persist() { try { sessionStorage.setItem(FKEY, JSON.stringify({ v: 1, f: F })); } catch (e) { /* ignore */ } }
   // events are GameReplays brackets and listings: nothing to pick once that source is excluded
@@ -264,12 +287,14 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   const M_MATCH = 4;      // the Matchup filters (own faction, opponents' faction)
   const M_RESULT = 8;     // the Result filter
   const M_PLAYERS = 16, M_OPPPL = 32, M_EVENTS = 64, M_MAPS = 128, M_FMT = 256;   // one per rail list, so its counts can leave its own filter out
-  const M_FACET = M_PLAYERS | M_OPPPL | M_EVENTS | M_MAPS | M_FMT;
+  const M_WHO = 512;   // the Players panel (F.who): every finder with a pick matches a seat of its own in the game - a game-level bit, set on all its seats
+  const M_FACET = M_PLAYERS | M_OPPPL | M_EVENTS | M_MAPS | M_FMT | M_WHO;
   const M_ALL = M_SEAT | M_POP | M_MATCH | M_RESULT | M_FACET;
   let MASK = null, maskKey = null;
   // the filters the mask depends on: everything but the unit-level ones (classes, merge)
   let onlyKey = null;   // bind opts.onlyKey: the page's condition state, part of the mask cache key
-  const maskKeyOf = () => JSON.stringify([F.facs, F.opp, F.sources, F.tmin, F.tmax, F.elo, F.oppElo, F.result, F.events, F.maps, F.players, F.oppPlayers, F.level, F.cash, F.fmt, onlyKey ? onlyKey() : null]);
+  const keyOfF = F => JSON.stringify([F.facs, F.opp, F.sources, F.tmin, F.tmax, F.elo, F.oppElo, F.result, F.events, F.maps, F.players, F.oppPlayers, F.level, F.cash, F.fmt, F.dfrom, F.dto, F.who, F.winner, F.gtype, F.mirror, onlyKey ? onlyKey() : null]);
+  const maskKeyOf = () => keyOfF(F);
   // the last MASKS_KEEP masks by key (half a megabyte each): a filter toggled off is back to a mask already
   // computed, and so is a click through a few states and back - the pass over the seats (~25 ms) is saved
   const MASKS = new Map(), MASKS_KEEP = 12;
@@ -287,20 +312,78 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     maskKey = key;
     return MASK;
   }
+  // the mask under the filters with some of them changed (a page's "what would this pick list" count): the same
+  // cache, so a variant asked for twice is computed once, and the real mask is not disturbed
+  const maskWith = patch => { const G = { ...F, ...patch }; return memo(MASKS, keyOfF(G), () => computeMask(G, only, new Uint16Array(NSEATS)), MASKS_KEEP); };
   // the mask with every rail filter at its default and no page condition: a page's "usual" baseline, computed once
   let DMASK = null;
   const maskDefault = () => DMASK || (DMASK = computeMask({ ...FDEF }, null, new Uint16Array(NSEATS)));
+  // the Players panel's finders name distinct seats: "X + X" is not a game with X in it twice. A finder is
+  // {p: Set of player ids, f: Set of faction ids}, either empty = any; a seat matches when its player and faction do.
+  // Can every finder with a pick be given its own seat of g, seat `skip` aside? A few seats, a few finders: backtracking
+  // win: the Winner filter names this finder - its seat must have won (a finder with only that still asks for a seat)
+  // e: the finder's rating range [lo, hi] ('' = open end); a narrowed range wants a rated seat inside it
+  const eloOn = e => !!e && (e[0] !== '' || e[1] !== '');
+  const eloFits = (e, q) => !eloOn(e) || (q.e != null && (e[0] === '' || q.e >= e[0]) && (e[1] === '' || q.e <= e[1]));
+  // t: the finder's side in a team game ('A', 'B'...): finders on one side sit as teammates, on different sides as
+  // opponents (the user, 2026-09-16); a side alone still asks for a seat
+  // known: the finder says who sat there (a player, a faction, a rating); "won" on a finder that does not is no filter
+  // - a nameless seat that won is any game with a result (the user, 2026-09-16)
+  const finderSet = (w, k) => { const p = new Set(w.p), f = new Set(w.f), known = p.size > 0 || f.size > 0 || eloOn(w.e); return { p, f, e: w.e, t: w.t == null ? null : w.t, known, win: F.winner === k }; };
+  const finderSets = a => a.map(finderSet).filter(w => w.known || w.t != null);
+  const seatFits = (w, q) => (!w.p.size || w.p.has(pidOf(q))) && (!w.f.size || w.f.has(q.f)) && eloFits(w.e, q) && (!w.win || !w.known || q.w === 1);
+  const noRecord = g => g.p.every(q => q.w !== 1 && q.w !== 0);   // the Winner filter's "no record": the replay says who won for no seat
+  // can every finder be given its own seat of g, the sides consistent? `pre` = finders already on a seat ({t, seat}:
+  // the facet counts try a player on seat j and ask whether the rest fit around it)
+  function seatsFor(g, sets, pre) {
+    const at = pre ? pre.slice() : []; let used = 0; for (const x of at) used |= 1 << x.seat;
+    const mates = (i, j) => !((g.p[i].om >> j) & 1);   // seats i and j (i != j) on one team
+    const sideFits = (t, j) => { if (t == null) return true; for (const x of at) if (x.t != null && mates(x.seat, j) !== (x.t === t)) return false; return true; };
+    const rec = k => {
+      if (k === sets.length) return true;
+      const w = sets[k];
+      for (let j = 0; j < g.p.length; j++) if (!((used >> j) & 1) && seatFits(w, g.p[j]) && sideFits(w.t, j)) { used |= 1 << j; at.push({ t: w.t, seat: j }); if (rec(k + 1)) return true; at.pop(); used &= ~(1 << j); }
+      return false;
+    };
+    return rec(0) ? at : null;   // the assignment (pre first), or null
+  }
+  // a mirror: every side fields the same factions - a 1v1 of one faction, an FFA all of one, a 2v2 of the same pair.
+  // Sides from the seat opponent masks: a side is a seat and its mates
+  function mirrorGame(g) {
+    const n = g.p.length; if (n < 2) return false;
+    let seen = 0, key = null;
+    for (let i = 0; i < n; i++) { if ((seen >> i) & 1) continue;
+      const fs = []; for (let j = 0; j < n; j++) if (j === i || !((g.p[i].om >> j) & 1)) { seen |= 1 << j; fs.push(g.p[j].f); }
+      const k = fs.sort((a, b) => a - b).join(','); if (key === null) key = k; else if (k !== key) return false; }
+    return true;
+  }
+  // the game's seats in the finders' order - finder 1's seat first - then the rest: the Replays tab lists a game's
+  // players that way, so a pick reads in the same column on every row (the user, 2026-09-16); empty finders take
+  // the seats left, in order
+  function seatOrder(g) {
+    const at = seatsFor(g, (F.who || []).map(finderOf).map(finderSet)), out = at ? at.map(x => x.seat) : [];
+    for (let j = 0; j < g.p.length; j++) if (!out.includes(j)) out.push(j);
+    return out;
+  }
+  const eloRangeOf = e => Array.isArray(e) && e.length === 2 && e.every(x => x === '' || typeof x === 'number') ? e : ['', ''];   // the bucket lists of before read as open
+  const finderOf = w => Array.isArray(w) ? { p: w, f: [], e: ['', ''], t: null } : w && w.p ? { ...w, e: eloRangeOf(w.e), t: w.t == null ? null : w.t } : { p: [], f: [], e: ['', ''], t: null };   // a saved finder of the first shape (a bare list of ids)
   function computeMask(F, only, MASK) {
     const set = a => a.length ? new Set(a) : null;
     const facs = set(F.facs), opp = set(F.opp), sources = set(F.sources), cash = set(F.cash), elo = set(F.elo), oppElo = set(F.oppElo),
-      result = set(F.result), players = set(F.players), oppPlayers = set(F.oppPlayers), events = set(F.events), maps = set(F.maps), fmt = set(F.fmt);
+      result = set(F.result), players = set(F.players), oppPlayers = set(F.oppPlayers), events = set(F.events), maps = set(F.maps), fmt = set(F.fmt), gtype = F.gtype || null;
     const tmin = F.tmin !== '' ? +F.tmin : -Infinity, tmax = F.tmax !== '' ? +F.tmax : Infinity;
+    const dfrom = F.dfrom || '', dto = F.dto || '';   // days compare as strings; a game without a date fails a bound
+    const who = finderSets((F.who || []).map(finderOf)), nWho = (F.who || []).length;   // empty finders ask nothing of a seat, but a seat there must be
     const lvl = (LEVELS.find(l => l[0] === F.level) || LEVELS[2])[2];   // null = all
     let si = 0;
     for (const g of D.games) {
       const ev = g.ev == null ? -1 : g.ev, mp = g.mp == null ? -1 : g.mp;
-      const gpop = g.t >= LEN_MIN && g.t >= tmin && g.t <= tmax && (!sources || sources.has(g.s)) && (!cash || cash.has(cashKey(g)));
-      const gfacet = (!events || events.has(ev) ? M_EVENTS : 0) | (!maps || maps.has(mp) ? M_MAPS : 0) | (!fmt || fmt.has(g.k) ? M_FMT : 0);
+      const gpop = g.t >= LEN_MIN && g.t >= tmin && g.t <= tmax && (!sources || sources.has(g.s)) && (!cash || cash.has(cashKey(g)))
+        && (!dfrom || (g.d != null && g.d >= dfrom)) && (!dto || (g.d != null && g.d <= dto));
+      // the finders are the game's seats: as many players as finders (the user, 2026-09-15), every finder's pick someone
+      // in the game, each on a seat of their own
+      const whoOk = (!nWho || g.p.length === nWho) && (!who.length || seatsFor(g, who)) && (F.winner !== 'none' || noRecord(g)) && (!F.mirror || mirrorGame(g));
+      const gfacet = (!events || events.has(ev) ? M_EVENTS : 0) | (!maps || maps.has(mp) ? M_MAPS : 0) | ((!fmt || fmt.has(g.k)) && (!gtype || gtypeOf(g.k) === gtype) ? M_FMT : 0) | (whoOk ? M_WHO : 0);
       for (let i = 0; i < g.p.length; i++) {
         const p = g.p[i];
         if (p.f == null || !D.factions[p.f]) { MASK[si++] = 0; continue; }
@@ -339,6 +422,8 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   D.templates.forEach(t => { const m = /^(?:GC_)?([A-Za-z]+)_/.exec(t.raw); t.gen = m && GEN_PREFIX[m[1]] != null ? GEN_PREFIX[m[1]] : null; });
   // "Fake Barracks", not "Fake GLA Barracks" (the user, 2026-09-14); the exporter names them so since then, this covers an older export
   D.templates.forEach(t => { if (t.n) t.n = t.n.replace(/^Fake GLA /, 'Fake '); if (t.m) t.m = t.m.replace(/^Fake GLA /, 'Fake '); });
+  // Zero Hour's name for GLAInfantryTunnelDefender (the user, 2026-09-16); the exporter names it so since then, this covers an older export
+  D.templates.forEach(t => { if (t.n) t.n = t.n.replace(/^Tunnel Defender$/, 'RPG Trooper'); if (t.m) t.m = t.m.replace(/^Tunnel Defender$/, 'RPG Trooper'); });
   // Boss general and Generals Challenge (GC_) tech only exists on a few challenge-style maps: the pages leave those orders out
   D.templates.forEach(t => { t.challenge = /^(Boss_|GC_)/.test(t.raw); });
   // per template: t.own = a bit per faction id that can queue it, t.ci = its class index, t.sb = its side's bit,
@@ -415,11 +500,19 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     return `<button class="chip" aria-pressed="${pressed}" ${attrs}>${color ? `<i class="sw" style="--c:${color}"></i>` : ''}${esc(label)}</button>`;
   }
   let hidden = new Set();
+  // the days the set spans, for the date group (absent when the export carries no dates: older datasets)
+  let DAYS = null;
+  const days = () => DAYS || (DAYS = (() => { let lo = null, hi = null; for (const g of D.games) if (g.d != null) { if (lo === null || g.d < lo) lo = g.d; if (hi === null || g.d > hi) hi = g.d; }
+    return lo === null ? [] : [lo, hi]; })());
+  const RAIL_ORDER = ['level', 'facs', 'opp', 'elo', 'oppElo', 'players', 'oppPlayers', 'cash', 'length', 'date', 'result', 'maps', 'sources', 'events', 'fmt', 'naming'];
+  let order = RAIL_ORDER, moreOpen = false, labels = {};   // opts.labels renames a group's title for the page
+  // is a group's filter away from its default (the folded tail's summary counts them)
+  const filterOn = n => n === 'level' ? F.level !== 'all' : n === 'winner' ? F.winner != null : n === 'norec' ? F.winner === 'none' : n === 'mirror' ? !!F.mirror : n === 'gtype' ? F.gtype != null : n === 'length' ? F.tmin !== '' || F.tmax !== '' : n === 'date' ? !!(F.dfrom || F.dto) : n === 'naming' ? F.merge !== 'smart' : Array.isArray(F[n]) && F[n].length > 0;
   let only = null;   // a page's extra condition on a seat (win rates: it needs a result), so the rail's counts match its tiles
   // faceted counts for the rail's lists: how many games each entry has under every
   // OTHER active filter, so after picking a player the opponent list reads "who he
   // faced, how often". Player lists count seats, the game-level lists count games.
-  const FACETS = ['players', 'oppPlayers', 'events', 'maps', 'fmt'];
+  const FACETS = ['players', 'oppPlayers', 'events', 'maps', 'fmt', 'who'];
   let facets = null;
   const FACET_MEMO = new Map();   // by mask key, as the masks: the counts of a state seen before come back for free
   function facet() {
@@ -429,117 +522,151 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   function facetOf(M) {
     const need = M_SEAT | M_POP;
     // "passes every other list's filter" per list; counters indexed by the export's ids, folded into Maps keyed like the chips at the end
-    const oP = M_FACET & ~M_PLAYERS, oO = M_FACET & ~M_OPPPL, oE = M_FACET & ~M_EVENTS, oM = M_FACET & ~M_MAPS, oF = M_FACET & ~M_FMT;
+    const oP = M_FACET & ~M_PLAYERS, oO = M_FACET & ~M_OPPPL, oE = M_FACET & ~M_EVENTS, oM = M_FACET & ~M_MAPS, oF = M_FACET & ~M_FMT, oW = M_FACET & ~M_WHO;
+    const oT = oF & ~M_WHO, cT = new Map();   // game type: counted without the Players panel too, whose finder count is the type's own seat count (a Team pick would read 1v1 as 0)
     const NP = (D.players || []).length, NE = (D.events || []).length + 2, NM = (D.maps || []).length + 1;   // events: +1 = none (unlisted GameReplays), +2 = none (other sources)
     const cP = new Uint32Array(NP), cO = new Uint32Array(NP), cE = new Uint32Array(NE), cM = new Uint32Array(NM), cF = new Map();
-    let si = 0;
+    // the Players panel: a finder's count of a player = games he is in that pass everything else, the OTHER finders
+    // included (with one finder on X, the next reads "who X played, how often"); a game counts once per player
+    const whoSets = order.includes('who') ? F.who.map(finderSet) : [], NW = whoSets.length, noRec = F.winner === 'none', mir = !!F.mirror, cW = whoSets.map(() => new Uint32Array(NP)), sW = whoSets.map(() => new Int32Array(NP));
+    let si = 0, gn = 0;
     for (const g of D.games) {
+      gn++;
+      let whoAny = false;   // does any seat of the game pass everything but the Players panel?
       const ev = g.ev == null ? (g.s === 'gamereplays' ? NE - 2 : NE - 1) : g.ev, mp = g.mp == null ? NM - 1 : g.mp;
-      let seen = 0;   // a game counts once however many seats pass
+      let seen = 0, tSeen = false;   // a game counts once however many seats pass
       for (let i = 0; i < g.p.length; i++) {
         const m = M[si++];
         if ((m & need) !== need) continue;
         const p = g.p[i];
         if ((m & oP) === oP && p.pl != null) cP[p.pl]++;
         if ((m & oO) === oO) for (let j = 0; j < g.p.length; j++) if ((p.om >> j) & 1 && g.p[j].pl != null) cO[g.p[j].pl]++;
+        if ((m & oW) === oW) whoAny = true;
         if (!(seen & M_EVENTS) && (m & oE) === oE) { seen |= M_EVENTS; cE[ev]++; }
         if (!(seen & M_MAPS) && (m & oM) === oM) { seen |= M_MAPS; cM[mp]++; }
         if (!(seen & M_FMT) && (m & oF) === oF) { seen |= M_FMT; cF.set(g.k, (cF.get(g.k) || 0) + 1); }
+        if (!tSeen && (m & oT) === oT) { tSeen = true; const t = gtypeOf(g.k); cT.set(t, (cT.get(t) || 0) + 1); }
+      }
+      if (whoAny && NW && g.p.length === NW && (!noRec || noRecord(g)) && (!mir || mirrorGame(g))) for (let k = 0; k < NW; k++) {
+        // finder k's count of the player on seat j: the seat passes the finder's faction pick (and won, if the
+        // Winner filter names the finder), and the other finders' picks fit on the remaining seats
+        const others = whoSets.filter((x, i) => i !== k && (x.known || x.t != null)), fk = whoSets[k].f, ek = whoSets[k].e, tk = whoSets[k].t, wk = whoSets[k].win;   // the counted player makes finder k known, so its "won" applies
+        for (let j = 0; j < g.p.length; j++) { const q = g.p[j], pl = q.pl; if (pl != null && sW[k][pl] !== gn && (!fk.size || fk.has(q.f)) && eloFits(ek, q) && (!wk || q.w === 1) && seatsFor(g, others, [{ t: tk, seat: j }])) { sW[k][pl] = gn; cW[k][pl]++; } }
       }
     }
-    const c = { players: new Map(), oppPlayers: new Map(), events: new Map(), maps: new Map(), fmt: cF };
-    for (let i = 0; i < NP; i++) { if (cP[i]) c.players.set(D.players[i].i, cP[i]); if (cO[i]) c.oppPlayers.set(D.players[i].i, cO[i]); }
+    const c = { players: new Map(), oppPlayers: new Map(), events: new Map(), maps: new Map(), fmt: cF, gtype: cT, who: cW.map(a => { const m = new Map(); for (let i = 0; i < NP; i++) if (a[i]) m.set(D.players[i].i, a[i]); return m; }) };
+    for (let i = 0; i < NP; i++) { const id = D.players[i].i; if (cP[i]) c.players.set(id, cP[i]); if (cO[i]) c.oppPlayers.set(id, cO[i]); }
     for (let i = 0; i < NE; i++) if (cE[i]) c.events.set(i === NE - 2 ? -1 : i === NE - 1 ? null : i, cE[i]);
     for (let i = 0; i < NM; i++) if (cM[i]) c.maps.set(i === NM - 1 ? -1 : i, cM[i]);
     return c;
   }
   const cnt = (k, id) => facets[k].get(id) || 0;
 
+  // who = facs | opp (the rail's lists), or 'who' with k = a finder of the Players panel (its own faction pick)
+  const facChips = (who, k) => { const picked = k == null ? F[who] : F.who[k].f, attr = id => k == null ? `data-${who}="${id}"` : `data-whofac="${k}" data-id="${id}"`; return SIDES.map(side => `
+    <div class="side-row"><button class="lbl side" data-side="${side}" data-who="${who}"${k == null ? '' : ` data-k="${k}"`} aria-pressed="${FACS.filter(f => f.side === side).every(f => picked.includes(f.id))}" title="all ${side} factions">${side}</button><div class="chips">
+      ${FACS.filter(f => f.side === side).map(f => chip(f.general ? f.name.replace(side + ' ', '') : 'Vanilla', picked.includes(f.id), attr(f.id))).join('')}
+    </div></div>`).join(''); };
   function renderRail() {
+    if (order.includes('who')) {   // the finders, in shape and number: at least two, at most the map's seats - empty ones past that go, picked ones stay
+      F.who = F.who.map(finderOf).slice(0, WHO_MAX); while (F.who.length < WHO_MIN) F.who.push({ p: [], f: [], e: ['', ''], t: null });
+      const cap = whoCap(); while (F.who.length > cap && !F.who[F.who.length - 1].p.length && !F.who[F.who.length - 1].f.length) { F.who.pop(); whoQ.p.length = whoQ.f.length = Math.min(whoQ.p.length, F.who.length); }
+      if (typeof F.winner === 'number' && !(F.winner < F.who.length)) F.winner = null;
+      // the finder count and the game type agree, or the type lets go (a player added to a 1v1, a team game cut to two)
+      if (Array.isArray(F.gtype)) F.gtype = null;   // a saved pick of the first shape (a list)
+      if (F.gtype === '1v1' ? F.who.length !== WHO_MIN : F.gtype && F.who.length < 3) F.gtype = null;
+      for (const w of F.who) if (F.gtype !== 'team' || (w.t != null && 'ABCDEFG'.indexOf(w.t) >= F.who.length - 1)) w.t = null;   // sides are a team game's, and fewer than the finders
+    }   // the Players panel's finders, in shape and number, before their counts
     facets = facet();
-    const facChips = who => SIDES.map(side => `
-      <div class="side-row"><button class="lbl side" data-side="${side}" data-who="${who}" aria-pressed="${FACS.filter(f => f.side === side).every(f => F[who].includes(f.id))}" title="all ${side} factions">${side}</button><div class="chips">
-        ${FACS.filter(f => f.side === side).map(f => chip(f.general ? f.name.replace(side + ' ', '') : 'Vanilla', F[who].includes(f.id), `data-${who}="${f.id}"`)).join('')}
-      </div></div>`).join('');
-    const grp = (name, html) => hidden.has(name) ? '' : html;
-    $('rail').innerHTML = `
-      <div class="grp">
-        <div class="grp-h"><span class="lbl">Level</span></div>
+    // the rail is rebuilt whole on every filter change, which threw away where the user had scrolled it and its
+    // lists to - a click on the 40th player snapped the list back to the top (the user, 2026-09-15); keep every
+    // scrolled offset by id (the rail itself, the player / opponent / event / map lists) across the rebuild
+    const rail = $('rail'), kept = [...rail.querySelectorAll('[id]')].filter(el => el.scrollTop).map(el => [el.id, el.scrollTop]), railTop = rail.scrollTop;
+    // a finder's list that was down stays down across the rebuild (a faction pick is a filter change), scrolled as it was
+    const openWho = whoOpen, openTop = openWho ? (rail.querySelector(`[data-cblist="${openWho}"]`) || {}).scrollTop || 0 : 0;
+    const focusWho = document.activeElement && document.activeElement.dataset.cbkey ? document.activeElement.dataset.cbkey : null;
+    // one named group each, so a page can leave some out (bind opts.hide), put them in its own order and fold a
+    // tail away (opts.order; the Replays tab lays them out as a header under its search box, 2026-09-15)
+    const G = {
+      level: `<div class="grp-h"><span class="lbl">Level</span></div>
         <div class="chips">${LEVELS.filter(([k]) => k !== 'low' || F.level === 'low').map(([k, l]) => chip(l, F.level === k, `data-level="${k}"`)).join('')}</div>
-        <div class="hint">High: everyone GeneralsOnline ${HIGH_ELO}+, or a GameReplays tournament / expert / gold / ROTW game.</div>
-      </div>
-      <div class="grp">
-        <div class="grp-h"><span class="lbl">Faction played</span><button class="act" data-clear="facs">any</button></div>
-        ${facChips('facs')}
-      </div>
-      <div class="grp">
-        <div class="grp-h"><span class="lbl">Against</span><button class="act" data-clear="opp">any</button></div>
-        ${facChips('opp')}
-      </div>
-      <div class="grp">
-        <div class="grp-h"><span class="lbl">Player ELO</span><button class="act" data-clear="elo">any</button></div>
-        <div class="chips">${ELO.map(([k, l]) => chip(l, F.elo.includes(k), `data-elo="${k}"`)).join('')}${chip('Unrated', F.elo.includes('none'), 'data-elo="none"')}</div>
-      </div>
-      <div class="grp">
-        <div class="grp-h"><span class="lbl">Opponent ELO</span><button class="act" data-clear="oppElo">any</button></div>
-        <div class="chips">${ELO.map(([k, l]) => chip(l, F.oppElo.includes(k), `data-oppelo="${k}"`)).join('')}${chip('Unrated', F.oppElo.includes('none'), 'data-oppelo="none"')}</div>
-      </div>
-      ${PLAYERS.length ? `<div class="grp">
-        <div class="grp-h"><span class="lbl">Player</span><button class="act" data-clear="players">any</button></div>
-        <input id="plq" class="search" type="search" placeholder="find a player\u2026" value="${esc(plQuery)}" autocomplete="off">
-        <div class="chips scroll" id="plchips">${playerChips('players')}</div>
-      </div>
-      <div class="grp">
-        <div class="grp-h"><span class="lbl">Opponent</span><button class="act" data-clear="oppPlayers">any</button></div>
-        <input id="oplq" class="search" type="search" placeholder="find an opponent\u2026" value="${esc(oplQuery)}" autocomplete="off">
-        <div class="chips scroll" id="oplchips">${playerChips('oppPlayers')}</div>
-      </div>` : ''}
-      <div class="grp">
-        <div class="grp-h"><span class="lbl">Starting cash</span><button class="act" data-clear="cash">any</button></div>
-        <div class="chips">${CASH.map(([v, n]) => chip(`${fmtCash(v)} (${fmtInt(n)})`, F.cash.includes(String(v)), `data-cash="${v}"`)).join('')}${cashOther ? chip(`other (${fmtInt(cashOther)})`, F.cash.includes('other'), 'data-cash="other"') : ''}</div>
-      </div>
-      <div class="grp">
-        <div class="grp-h"><span class="lbl">Game length</span><button class="act" data-clear-len="1">any</button></div>
-        <div class="dual" id="dual">
+        <div class="hint">High: every seat ${HIGH_ELO}+ on GeneralsOnline, or a World Series game.</div>`,
+      facs: `<div class="grp-h"><span class="lbl">${labels.facs || 'Faction played'}</span><button class="act" data-clear="facs">clear</button></div>
+        ${facChips('facs')}`,
+      opp: `<div class="grp-h"><span class="lbl">${labels.opp || 'Against'}</span><button class="act" data-clear="opp">clear</button></div>
+        ${facChips('opp')}`,
+      elo: `<div class="grp-h"><span class="lbl">Player ELO</span><button class="act" data-clear="elo">clear</button></div>
+        <div class="chips">${ELO.map(([k, l]) => chip(l, F.elo.includes(k), `data-elo="${k}"`)).join('')}${chip('Unrated', F.elo.includes('none'), 'data-elo="none"')}</div>`,
+      oppElo: `<div class="grp-h"><span class="lbl">Opponent ELO</span><button class="act" data-clear="oppElo">clear</button></div>
+        <div class="chips">${ELO.map(([k, l]) => chip(l, F.oppElo.includes(k), `data-oppelo="${k}"`)).join('')}${chip('Unrated', F.oppElo.includes('none'), 'data-oppelo="none"')}</div>`,
+      players: PLAYERS.length ? `<div class="grp-h"><span class="lbl">Player${F.players.length ? ` <b class="n">(${F.players.length})</b>` : ''}</span><button class="act" data-clear="players">clear</button></div>
+        <input id="plq" class="search" type="search" placeholder="find a player…" value="${esc(plQuery)}" autocomplete="off">
+        <div class="chips scroll" id="plchips">${playerChips('players')}</div>` : '',
+      oppPlayers: PLAYERS.length ? `<div class="grp-h"><span class="lbl">Opponent${F.oppPlayers.length ? ` <b class="n">(${F.oppPlayers.length})</b>` : ''}</span><button class="act" data-clear="oppPlayers">clear</button></div>
+        <input id="oplq" class="search" type="search" placeholder="find an opponent…" value="${esc(oplQuery)}" autocomplete="off">
+        <div class="chips scroll" id="oplchips">${playerChips('oppPlayers')}</div>` : '',
+      who: PLAYERS.length ? whoHtml() : '',
+      cash: `<div class="grp-h"><span class="lbl">Starting cash</span><button class="act" data-clear="cash">clear</button></div>
+        <div class="chips">${CASH.map(([v, n]) => chip(`${fmtCash(v)} (${fmtInt(n)})`, F.cash.includes(String(v)), `data-cash="${v}"`)).join('')}${cashOther ? chip(`other (${fmtInt(cashOther)})`, F.cash.includes('other'), 'data-cash="other"') : ''}</div>`,
+      length: `<div class="grp-h"><span class="lbl">Game length</span><button class="act" data-clear-len="1">clear</button></div>
+        <div class="lenrow"><span id="tmin-l"></span><div class="dual" id="dual">
           <div class="track"></div><div class="fill" id="tfill"></div>
           ${LEN_MARKS.map(([m, l]) => `<div class="tick" style="left:${((m - LEN_MIN) / (LEN_MAX - LEN_MIN) * 100).toFixed(2)}%"><i></i><span>${l}</span></div>`).join('')}
           <input id="tmin" type="range" min="${LEN_MIN}" max="${LEN_MAX}" step="1" value="${F.tmin === '' ? LEN_MIN : F.tmin}" aria-label="shortest game, minutes">
           <input id="tmax" type="range" min="${LEN_MIN}" max="${LEN_MAX}" step="1" value="${F.tmax === '' ? LEN_MAX : F.tmax}" aria-label="longest game, minutes">
-        </div>
-        <div class="range-lbl"><span id="tmin-l"></span><span id="tmax-l"></span></div>
-        <div class="hint">In-game clock. Games under ${LEN_MIN} min are never counted.</div>
-      </div>
-      ${grp('result', `<div class="grp">
-        <div class="grp-h"><span class="lbl">Result</span><button class="act" data-clear="result">any</button></div>
-        <div class="chips">${chip('Won', F.result.includes('won'), 'data-result="won"')}${chip('Lost', F.result.includes('lost'), 'data-result="lost"')}${chip('No record', F.result.includes('none'), 'data-result="none"')}</div>
-      </div>`)}
-      ${MAPS.length ? `<div class="grp">
-        <div class="grp-h"><span class="lbl">Map</span><button class="act" data-clear="maps">any</button></div>
-        <input id="mapq" class="search" type="search" placeholder="find a map\u2026" value="${esc(mapQuery)}" autocomplete="off">
+        </div><span id="tmax-l"></span></div>
+        <div class="hint">In-game clock. Games under ${LEN_MIN} min are never counted.</div>`,
+      date: days().length ? `<div class="grp-h"><span class="lbl">Date</span><button class="act" data-clear-date="1">clear</button></div>
+        <div class="dates"><span>from</span><input id="dfrom" class="search" type="date" min="${days()[0]}" max="${days()[1]}" value="${esc(F.dfrom)}" aria-label="from day"><span>to</span><input id="dto" class="search" type="date" min="${days()[0]}" max="${days()[1]}" value="${esc(F.dto)}" aria-label="to day"></div>
+        <div class="hint">The day the replay was recorded, as the recorder's clock had it.</div>` : '',
+      winner: `<div class="grp-h"><span class="lbl">Winner</span><button class="act" data-clear="winner">clear</button></div>
+        <div class="chips">${F.who.map((w, k) => chip(`Player ${k + 1}`, F.winner === k, `data-winner="${k}"`)).join('')}${chip('No record', F.winner === 'none', 'data-winner="none"')}</div>
+        <div class="hint">The finder whose seat won the game; no record: the replay names no winner.</div>`,
+      result: `<div class="grp-h"><span class="lbl">Result</span><button class="act" data-clear="result">clear</button></div>
+        <div class="chips">${chip('Won', F.result.includes('won'), 'data-result="won"')}${chip('Lost', F.result.includes('lost'), 'data-result="lost"')}${chip('No record', F.result.includes('none'), 'data-result="none"')}</div>`,
+      maps: MAPS.length ? `<div class="grp-h"><span class="lbl">Map${F.maps.length ? ` <b class="n">(${F.maps.length})</b>` : ''}</span><button class="act" data-clear="maps">clear</button></div>
+        <input id="mapq" class="search" type="search" placeholder="find a map…" value="${esc(mapQuery)}" autocomplete="off">
         ${MI ? `<details class="map-narrow" id="mapnarrow"${mapPick.open ? ' open' : ''}><summary>narrow the list${facetCount() ? ` <b>${facetCount()}</b>` : ''}</summary><div class="map-tools" id="maptools">${mapFacetControls()}</div></details>` : ''}
         <div class="map-tools" id="mapall">${mapAll()}</div>
-        <div class="chips scroll" id="mapchips">${mapChips()}</div>
-      </div>` : ''}
-      <div class="grp">
-        <div class="grp-h"><span class="lbl">Source</span><button class="act" data-clear="sources">any</button></div>
-        <div class="chips">${SOURCES.map(s => chip(s, F.sources.includes(s), `data-src="${s}"`)).join('')}</div>
-      </div>
-      ${eventsApply() ? `<div class="grp">
-        <div class="grp-h"><span class="lbl">Event</span><button class="act" data-clear="events">any</button></div>
-        <input id="evq" class="search" type="search" placeholder="find an event\u2026" value="${esc(evQuery)}" autocomplete="off">
-        <div class="chips scroll" id="evchips">${eventChips()}</div>
-        <div class="hint">GameReplays bracket or listing tier; counts follow the other filters.</div>
-      </div>` : ''}
-      ${FMTS.length > 1 ? `<div class="grp">
-        <div class="grp-h"><span class="lbl">Format</span><button class="act" data-clear="fmt">any</button></div>
+        <div class="chips scroll" id="mapchips">${mapChips()}</div>` : '',
+      sources: `<div class="grp-h"><span class="lbl">Source</span><button class="act" data-clear="sources">clear</button></div>
+        <div class="chips">${SOURCES.map(s => chip(s, F.sources.includes(s), `data-src="${s}"`)).join('')}</div>`,
+      events: eventsApply() ? `<div class="grp-h"><span class="lbl">Event${F.events.length ? ` <b class="n">(${F.events.length})</b>` : ''}</span><button class="act" data-clear="events">clear</button></div>
+        ${whoBox('e', 0, F.events.map(id => ({ t: eventName(id), attr: `data-event="${id}"` })), 'find an event\u2026')}
+        <div class="hint">GameReplays bracket or listing tier; counts follow the other filters.</div>` : '',
+      gtype: `<div class="grp-h"><span class="lbl">Game type</span><button class="act" data-clear="gtype">clear</button></div>
+        <div class="chips">${GTYPES.map(([v, l]) => chip(`${l} (${fmtInt(cnt('gtype', v))})`, F.gtype === v, `data-gtype="${v}"`)).join('')}</div>`,
+      fmt: FMTS.length > 1 ? `<div class="grp-h"><span class="lbl">Format</span><button class="act" data-clear="fmt">clear</button></div>
         <div class="chips">${FMTS.map(([v]) => chip(`${v} (${fmtInt(cnt('fmt', v))})`, F.fmt.includes(v), `data-fmt="${v}"`)).join('')}</div>
-        <div class="hint">Players are the seats that play; observers don't count.</div>
-      </div>` : ''}
-      <div class="grp">
-        <div class="grp-h"><span class="lbl">Naming</span></div>
+        <div class="hint">Players are the seats that play; observers don't count.</div>` : '',
+      // the Players panel's "no result on record", folded away with the rest (the user, 2026-09-16)
+      norec: `<div class="grp-h"><span class="lbl">Record</span></div>
+        <div class="chips">${chip('no result on record', F.winner === 'none', 'data-winner="none" title="games whose replay names no winner"')}</div>`,
+      naming: `<div class="grp-h"><span class="lbl">Naming</span></div>
         <div class="chips">${MERGE.map(([k, l]) => chip(l, F.merge === k, `data-merge="${k}"`)).join('')}</div>
-        <div class="hint">Identical: a general's variant joins its base only when it plays the same (Battle Master (Nuke) stands alone). All: every variant joins. Per template: one row each.</div>
-      </div>`;
+        <div class="hint">Identical: a general's variant joins its base only when it plays the same (Battle Master (Nuke) stands alone). All: every variant joins. Per template: one row each.</div>`,
+    };
+    // a name, or an array of names for groups that share one box (the Replays tab: a side's player and faction)
+    const grp = name => Array.isArray(name) ? (inner => inner ? `<div class="grp-set" data-set="${name.join('+')}">${inner}</div>` : '')(name.map(grp).join(''))
+      : hidden.has(name) || !G[name] ? '' : `<div class="grp" data-grp="${name}">${G[name]}</div>`;
+    // the page's order, 'more' folding what follows it into a details, closed until opened
+    const at = order.indexOf('more'), head = at < 0 ? order : order.slice(0, at), tail = at < 0 ? [] : order.slice(at + 1);
+    const folded = tail.map(grp).join(''), nOn = tail.flat().filter(n => !hidden.has(n) && filterOn(n)).length;
+    $('rail').innerHTML = head.map(grp).join('')
+      + (folded ? `<details class="more-f" id="morefilters"${moreOpen ? ' open' : ''}><summary>more filters${nOn ? ` <b class="n">(${nOn})</b>` : ''}</summary><div class="more-body">${folded}</div></details>` : '');
+    // a group's hint doubles as its label's tooltip, for a page that hides the hints (the Replays tab's folded groups)
+    for (const g of rail.querySelectorAll('.grp')) { const h = g.querySelector(':scope > .hint'), l = g.querySelector('.grp-h .lbl'); if (h && l && !l.title) l.title = h.textContent; }
+    // a clear button only while there is something to clear (the user, 2026-09-15)
+    const whoOn = k => !!(F.who[k] && (F.who[k].p.length || F.who[k].f.length || eloOn(F.who[k].e) || F.who[k].t != null));
+    for (const b of rail.querySelectorAll('.act[data-clear], .act[data-clear-len], .act[data-clear-date], .act[data-clearwho]')) {
+      const d = b.dataset;
+      b.hidden = !(d.clearwho != null ? whoOn(+d.clearwho) : d.clearLen ? filterOn('length') : d.clearDate ? filterOn('date') : d.clear === 'who' ? F.who.some((w, k) => whoOn(k)) || !!F.mirror : filterOn(d.clear));
+    }
+    rail.scrollTop = railTop;
+    for (const [id, top] of kept) { const el = $(id); if (el) el.scrollTop = top; }
+    whoOpen = null;
+    if (focusWho) { const inp = rail.querySelector(`[data-cbkey="${focusWho}"]`); if (inp) { whoRefocus = true; inp.focus({ preventScroll: true }); whoRefocus = false; inp.setSelectionRange(inp.value.length, inp.value.length); } }   // focus back, without the list it would bring
+    if (openWho) { whoListOpen(openWho); const list = rail.querySelector(`[data-cblist="${openWho}"]`); if (list) list.scrollTop = openTop; }
     syncLength(); syncMapAll(); renderClasses();
   }
   // the unit-class filter is the unit pages' own (unit mix, combat): it lives on the page, in its #classes slot,
@@ -553,32 +680,143 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
       + (PAGE === 'combat' ? `<span class="sep"></span>${chip('Combat units only', F.noncombat, 'data-nc="1"')}` : `<button class="act" data-combat="1">combat only</button>`) + `</div>`
       + `<span class="hint">${PAGE === 'combat' ? 'Economy = workers, dozers, supply trucks, Chinooks. Combat units only drops everything with no weapon that removes hit points (ambulance, hacker, radar van, ECM, every economy unit) from the rows and the totals; they still show as what a picked unit hit.' : 'Economy = workers, dozers, supply trucks, Chinooks.'}</span>`;
   }
-  function eventChips() {
-    const q = evQuery.trim().toLowerCase();
-    const on = id => F.events.includes(id);
-    const list = EVENTS.filter(e => (cnt('events', e.id) || on(e.id)) && (!q || e.name.toLowerCase().includes(q)));
-    // by count under the other filters - a fixed order, so a click never moves the chip under the mouse (picks used to
-    // jump to the top: annoying to unpick, and the neighbours swapped; the user, 2026-09-14); a pick stays listed at 0
-    list.sort((a, b) => cnt('events', b.id) - cnt('events', a.id));
-    const noEvent = cnt('events', -1);
-    const row = (label, n, pressed, id) => `<button class="chip" aria-pressed="${pressed}" data-event="${id}"><span>${esc(label)}</span><small>${fmtInt(n)}</small></button>`;
-    return list.map(e => row(e.name, cnt('events', e.id), on(e.id), e.id)).join('')
-      + (!q && (noEvent || on(-1)) ? row('No event', noEvent, on(-1), -1) : '')
-      + (q && !list.length ? '<span class="hint">no event matches</span>' : '');
+  // the event list: a combobox (as the finders' lists, below; the user, 2026-09-15), every event with its count under
+  // the other filters, in families - an event's yearly runs together, the families by their total, the years in
+  // order - a fixed order, so a click never moves the row under the mouse (picks used to jump to the top: annoying
+  // to unpick, and the neighbours swapped; the user, 2026-09-14); a pick stays listed at 0
+  const eventName = id => id < 0 ? 'No event' : (EVENTS.find(e => e.id === id) || { name: '#' + id }).name;
+  function eventOptions() {
+    const q = (whoQ.e[0] || '').trim().toLowerCase(), on = id => F.events.includes(id);
+    const list = EVENTS.filter(e => !q || e.name.toLowerCase().includes(q));
+    const fam = new Map(); for (const e of list) fam.set(e.fam, (fam.get(e.fam) || 0) + cnt('events', e.id));
+    list.sort((a, b) => fam.get(b.fam) - fam.get(a.fam) || a.fam.localeCompare(b.fam) || a.name.localeCompare(b.name));
+    const top = q ? WHO_TOP_Q : WHO_TOP, shown = list.filter((e, i) => i < top || on(e.id));
+    const row = (label, n, id) => `<button class="cb-o" role="option" aria-selected="${on(id)}" data-event="${id}"><span>${esc(label)}</span><small>${fmtInt(n)}</small></button>`;
+    return (!q && (cnt('events', -1) || on(-1)) ? row('No event', cnt('events', -1), -1) : '') + shown.map(e => row(e.name, cnt('events', e.id), e.id)).join('')
+      + (list.length > shown.length ? `<div class="cb-more">+ ${fmtInt(list.length - shown.length)} more \u00b7 type to narrow</div>` : '')
+      + (q && !list.length ? '<div class="cb-none">no event matches</div>' : '');
   }
   const SHOW = 150;   // the list is thousands long: top games until a search narrows it
+  // who = players | oppPlayers (the rail's seat / opponent lists)
   function playerChips(who) {
     const q = (who === 'players' ? plQuery : oplQuery).trim().toLowerCase();
-    const on = id => F[who].includes(id);
-    let list = PLAYERS.filter(p => (cnt(who, p.id) || on(p.id)) && (!q || p.name.toLowerCase().includes(q)));
+    const picks = F[who], on = id => picks.includes(id);
+    let list = PLAYERS.filter(p => (cnt(who, p.id) || on(p.id)) && (!q || p.name.toLowerCase().includes(q) || p.ids.includes(q)));
     const total = list.length;
-    // by count, a fixed order (see eventChips); a pick below the window is still listed, after it
+    // by count, a fixed order (see eventOptions); a pick below the window is still listed, after it
     list.sort((a, b) => cnt(who, b.id) - cnt(who, a.id));
     if (!q) list = list.filter((p, i) => i < SHOW || on(p.id));
     const attr = who === 'players' ? 'data-player' : 'data-oppplayer';
-    return list.map(p => `<button class="chip" aria-pressed="${on(p.id)}" ${attr}="${p.id}"><span>${esc(p.name)}</span><small>${fmtInt(cnt(who, p.id))}</small></button>`).join('')
+    return list.map(p => `<button class="chip" aria-pressed="${on(p.id)}" ${attr}="${p.id}"${p.accounts ? ` title="${esc(p.accounts)}"` : ''}><span>${esc(p.name)}</span><small>${fmtInt(cnt(who, p.id))}</small></button>`).join('')
       + (!q && total > SHOW ? `<span class="hint">top ${SHOW} of ${fmtInt(total)} \u00b7 search for the rest</span>` : '')
       + (q && !list.length ? '<span class="hint">no player matches</span>' : '');
+  }
+  // a finder's list of the Players panel: a combobox, as the Replays tab's map box - type to narrow, the list drops
+  // under the box and stays for another pick, the box reads the picks when nothing is typed. Every player is
+  // listed with a count under the other filters, 0 included (the user, 2026-09-15: the list is not narrowed;
+  // the game list below just comes up empty), most games first - a fixed order, so a pick never moves under the
+  // mouse (see eventOptions; a pick that jumped to the top was hard to unpick - the user, 2026-09-15); a pick past
+  // the window is still listed, after it
+  const WHO_TOP = 30, WHO_TOP_Q = 60;
+  function whoOptions(k) {
+    const q = (whoQ.p[k] || '').trim().toLowerCase(), picks = F.who[k].p, on = id => picks.includes(id), e = F.who[k].e;
+    const count = id => (facets.who[k] || new Map()).get(id) || 0;
+    // a rating range on the slider narrows the list to the players with a game in it (the user, 2026-09-15)
+    const list = PLAYERS.filter(p => (!q || p.name.toLowerCase().includes(q) || p.ids.includes(q)) && (!eloOn(e) || count(p.id) || on(p.id))).sort((a, b) => count(b.id) - count(a.id));
+    const top = q ? WHO_TOP_Q : WHO_TOP, shown = list.filter((p, i) => i < top || on(p.id));
+    return whoEloHtml(k) + shown.map(p => `<button class="cb-o" role="option" aria-selected="${on(p.id)}" data-whopick="${k}" data-id="${p.id}"${p.accounts ? ` title="${esc(p.accounts)}"` : ''}><span>${esc(p.name)}</span><small>${fmtInt(count(p.id))}</small></button>`).join('')
+      + (list.length > shown.length ? `<div class="cb-more">+ ${fmtInt(list.length - shown.length)} more \u00b7 type to narrow</div>` : '')
+      + (!list.length ? '<div class="cb-none">no player matches</div>' : '');
+  }
+  // the rating slider at the top of a finder's player list: the seat's rating, both ends open to begin with (the
+  // user, 2026-09-15: a range, not buckets; it filters the list then and there). The rail's length slider, same make.
+  const ELO_R = (() => { let lo = Infinity, hi = -Infinity; for (const g of D.games) for (const p of g.p) if (p.e != null) { if (p.e < lo) lo = p.e; if (p.e > hi) hi = p.e; } return lo === Infinity ? [1000, 2600] : [Math.floor(lo / 100) * 100, Math.ceil(hi / 100) * 100]; })();
+  const eloLabel = e => { const [lo, hi] = e; return lo !== '' && hi !== '' ? `${lo}\u2013${hi}` : lo !== '' ? `${lo}+` : hi !== '' ? `under ${hi}` : ''; };
+  function whoEloHtml(k) {
+    const [lo, hi] = F.who[k].e, a = lo === '' ? ELO_R[0] : lo, b = hi === '' ? ELO_R[1] : hi, pct = v => ((v - ELO_R[0]) / (ELO_R[1] - ELO_R[0]) * 100).toFixed(2);
+    return `<div class="cb-elo" data-eloslider="${k}"><span class="l">ELO</span><span class="v" data-elo-lo="${k}">${lo === '' ? 'any' : lo}</span><div class="dual">
+        <div class="track"></div><div class="fill" data-elo-fill="${k}" style="left:${pct(a)}%;right:${(100 - pct(b)).toFixed(2)}%"></div>
+        <input type="range" min="${ELO_R[0]}" max="${ELO_R[1]}" step="10" value="${a}" data-emin="${k}" aria-label="lowest rating">
+        <input type="range" min="${ELO_R[0]}" max="${ELO_R[1]}" step="10" value="${b}" data-emax="${k}" aria-label="highest rating">
+      </div><span class="v" data-elo-hi="${k}">${hi === '' ? 'any' : hi}</span></div>`;
+  }
+  // the slider's own sync: thumbs may not cross, the ends of the track mean "no bound", fill and ends follow
+  function whoEloSync(k, which) {
+    const box = $('rail').querySelector(`[data-eloslider="${k}"]`); if (!box) return;
+    const mn = box.querySelector('[data-emin]'), mx = box.querySelector('[data-emax]');
+    let lo = +mn.value, hi = +mx.value;
+    if (lo > hi) { if (which === 'lo') { hi = lo; mx.value = hi; } else { lo = hi; mn.value = lo; } }
+    F.who[k].e = [lo === ELO_R[0] ? '' : lo, hi === ELO_R[1] ? '' : hi];
+    const pct = v => (v - ELO_R[0]) / (ELO_R[1] - ELO_R[0]) * 100;
+    const fill = box.querySelector('[data-elo-fill]'); fill.style.left = pct(lo) + '%'; fill.style.right = (100 - pct(hi)) + '%';
+    box.querySelector('[data-elo-lo]').textContent = lo === ELO_R[0] ? 'any' : lo; box.querySelector('[data-elo-hi]').textContent = hi === ELO_R[1] ? 'any' : hi;
+  }
+  // a finder's faction list: the factions grouped by side, the side's name a toggle for all of it; type to narrow
+  // (a general's name, the side, or the community short name - "swg", "tox")
+  const facLabel = f => f.general ? f.name.replace(f.side + ' ', '') : 'Vanilla';
+  const facHit = (f, q) => !q || f.name.toLowerCase().includes(q) || shortName(f).toLowerCase().includes(q) || facLabel(f).toLowerCase().includes(q);
+  function whoFacOptions(k) {
+    const q = (whoQ.f[k] || '').trim().toLowerCase(), picks = F.who[k].f, on = id => picks.includes(id);
+    const html = SIDES.map(side => {
+      const fs = FACS.filter(f => f.side === side && facHit(f, q)); if (!fs.length) return '';
+      const all = FACS.filter(f => f.side === side).every(f => on(f.id));
+      return `<div class="cb-g"><button class="cb-h" type="button" data-side="${side}" data-who="who" data-k="${k}" aria-pressed="${all}" title="${all ? 'none of ' : 'all of '}${side}"><span>${side}</span></button>`
+        + fs.map(f => `<button class="cb-o" role="option" aria-selected="${on(f.id)}" data-whofac="${k}" data-id="${f.id}"><span>${esc(facLabel(f))}</span><small>${esc(shortName(f))}</small></button>`).join('') + '</div>';
+    }).join('');
+    return html || '<div class="cb-none">no faction matches</div>';
+  }
+  // the lists: key = 'p:k' (players) or 'f:k' (factions) of finder k
+  const whoInput = key => $('rail').querySelector(`[data-cbkey="${key}"]`), whoList = key => $('rail').querySelector(`[data-cblist="${key}"]`);
+  function whoListOpen(key) {
+    const inp = whoInput(key), list = whoList(key); if (!inp || !list) return;
+    if (whoOpen && whoOpen !== key) whoListClose();
+    const [kind, k] = key.split(':');
+    whoOpen = key; list.innerHTML = kind === 'p' ? whoOptions(+k) : kind === 'f' ? whoFacOptions(+k) : eventOptions(); list.hidden = false; inp.setAttribute('aria-expanded', 'true');
+  }
+  function whoListClose() {
+    if (!whoOpen) return;
+    const inp = whoInput(whoOpen), list = whoList(whoOpen);
+    if (list) list.hidden = true; if (inp) inp.setAttribute('aria-expanded', 'false');
+    whoOpen = null;
+  }
+  const whoName = id => (PLAYER_BY_ID.get(id) || { name: '#' + id }).name;
+  // a finder's box: the input, its picks drawn over it as chips ("or" between, a click removes one), the list under
+  // chips = [{t: label, attr: the click that removes it}]; a whole side picked reads as the side, one chip
+  // the picks over a finder's box: "a OR b" as chips, and past two of them the terser "IN a, b, c" (each name
+  // still a button that drops it) so a long pick list fits (the user, 2026-09-15)
+  const picksHtml = (chips, tag) => chips.length > 2
+    ? `<b class="or">in</b>` + chips.map(c => `<${tag} class="pk lite"${tag === 'button' ? ` type="button" ${c.attr} title="remove ${esc(c.t)}"` : ''}>${esc(c.t)}</${tag}>`).join('<i class="cm">,</i>')
+    : chips.map(c => `<${tag} class="pk"${tag === 'button' ? ` type="button" ${c.attr} title="remove ${esc(c.t)}"` : ''}>${esc(c.t)}<i>\u00d7</i></${tag}>`).join('<b class="or">or</b>');
+  const whoBox = (kind, k, chips, ph) => { const key = kind + ':' + k; return `<div class="cb" data-whocb="${key}"><input class="search" type="search" data-cbkey="${key}" placeholder="${chips.length ? ' ' : ph}" value="${esc(whoQ[kind][k] || '')}" autocomplete="off" role="combobox" aria-label="${kind === 'p' ? 'player ' + (k + 1) : kind === 'f' ? 'faction ' + (k + 1) : 'event'}${chips.length ? ': ' + esc(chips.map(c => c.t).join(' or ')) : ''}" aria-expanded="false">${chips.length ? `<div class="cb-picks">${picksHtml(chips, 'button')}</div><div class="cb-picks size" aria-hidden="true">${picksHtml(chips, 'span')}</div>` : ''}<div class="cb-list" data-cblist="${key}" role="listbox" hidden></div></div>`; };
+  const whoPlayerChips = (k, picks) => picks.map(id => ({ t: whoName(id), attr: `data-whopick="${k}" data-id="${id}"` }));
+  function whoFacChips(k, picks) {
+    const out = [], done = new Set();
+    for (const side of SIDES) { const ids = FACS.filter(f => f.side === side).map(f => f.id); if (ids.every(id => picks.includes(id))) { out.push({ t: side, attr: `data-side="${side}" data-who="who" data-k="${k}"` }); ids.forEach(id => done.add(id)); } }
+    for (const id of picks) if (!done.has(id)) out.push({ t: shortName(D.factions[id]), attr: `data-whofac="${k}" data-id="${id}"` });
+    return out;
+  }
+  // the Players panel: a finder per player wanted in the game, whichever seat - who they are, and (below) the
+  // faction they played; two to begin with (a 1v1 has two seats), a button for one more
+  const WHO_MIN = 2, WHO_MAX = 8;   // a game seats eight at most
+  // the finders a game can have: the picked map's slots (the largest of several), else eight
+  const whoCap = () => { const sz = F.maps.map(id => { const m = MAPS.find(m => m.id === id); return m && m.info.slots; }).filter(Boolean); return Math.max(WHO_MIN, Math.min(WHO_MAX, sz.length ? Math.max(...sz) : WHO_MAX)); };
+  // a team game's sides: letters, one more than are in use - two at least, and at most one fewer than the finders
+  // (some side has two players, or it is no team game): seven, for eight players (the user, 2026-09-16)
+  const sideLetters = () => { const used = new Set(F.who.map(w => w.t).filter(t => t != null)); return [...'ABCDEFG'].slice(0, Math.max(2, Math.min(F.who.length - 1, used.size + 1))); };
+  // did finder k's seat win: the Winner names it, or names a finder on its side (one side wins together)
+  const wonAt = k => typeof F.winner === 'number' && (F.winner === k || (F.who[k].t != null && F.who[F.winner] && F.who[F.winner].t === F.who[k].t));
+  function whoHtml() {
+    // one header row: the title, "add a player" and clear beside it - no row of its own, no hint under the finders
+    // (the panel was too tall; the user, 2026-09-15)
+    // the header: the game type first (it sets the finder count), then the title; a finder's header carries its
+    // "won" toggle - the Winner filter, one finder at a time (the user, 2026-09-15); "no result" beside "add a player"
+    // no label: the type chips lead the row (the user, 2026-09-16); the finders say the rest
+    return `<div class="grp-h"><span class="chips gtype" title="one finder per seat: a game with as many players as finders, each finder naming who sat there (the player, the faction, the rating - or anyone), whichever side they played">${GTYPES.map(([v, l]) => `<button class="chip" aria-pressed="${F.gtype === v}" data-gtype="${v}">${l}<small>${fmtInt(cnt('gtype', v))}</small></button>`).join('')}</span><span class="chips"><button class="chip" aria-pressed="${!!F.mirror}" data-mirror="1" title="every side fields the same factions: a 1v1 of one faction, a 2v2 of the same pair">mirror</button></span><span class="acts"><button class="act" data-clear="who" title="every finder emptied, the mirror off">clear</button></span></div>`
+      + '<div class="finders">' + F.who.map((w, k) => `<div class="slot">
+        <div class="grp-h"><span class="lbl">Player ${k + 1}${w.p.length ? ` <b class="n">(${w.p.length})</b>` : ''}</span><span class="acts">${F.who.length > WHO_MIN ? `<button class="act" data-rmwho="${k}">remove</button>` : ''}</span></div>
+        <div class="boxes">${whoBox('p', k, whoPlayerChips(k, w.p), 'find a player\u2026')}${whoBox('f', k, whoFacChips(k, w.f), 'faction\u2026')}</div>
+        <div class="fmeta">${F.gtype === 'team' ? `<span class="chips side" title="the side this player was on"><span class="l">side</span>${sideLetters().map(t => chip(t, w.t === t, `data-whoteam="${k}" data-id="${t}"`)).join('')}</span>` : ''}${chip('won', wonAt(k), `data-winner="${k}" title="the winner: this finder's seat${w.t != null ? ' - its whole side' : ''}"`)}</div></div>`).join('') + '</div>'
+      + (F.who.length < whoCap() ? `<div class="addrow"><button class="act add" data-addwho="1">+ add a player</button></div>` : '');   // under the finders (the user, 2026-09-16)
   }
   function mapFacetControls() {
     // one row per facet; several values in a row are OR-ed, rows are AND-ed
@@ -662,7 +900,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     const on = id => F.maps.includes(id);
     let list = listedMaps();
     const total = list.length;
-    // by count, a fixed order (see eventChips); a pick below the window is still listed, after it
+    // by count, a fixed order (see eventOptions); a pick below the window is still listed, after it
     list.sort((a, b) => cnt('maps', b.id) - cnt('maps', a.id));
     // like the player lists: the top of the list until a search narrows it (a thousand rows re-laid out per click was most of the click)
     if (!tq) list = list.filter((m, i) => i < SHOW || on(m.id));
@@ -690,8 +928,8 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     const idx = order.map((k, i) => sel.includes(k) ? i : -1).filter(i => i >= 0);
     const runs = [];
     for (const i of idx) { const r = runs[runs.length - 1]; if (r && r[r.length - 1] === i - 1) r.push(i); else runs.push([i]); }
-    const lo = i => i === 0 ? null : 1400 + (i - 1) * 100;
-    const hi = i => i === order.length - 1 ? null : 1400 + i * 100;
+    const lo = i => i === 0 ? null : ELO_LO + (i - 1) * 100;
+    const hi = i => i === order.length - 1 ? null : ELO_LO + i * 100;
     const out = runs.map(r => {
       const a = lo(r[0]), b = hi(r[r.length - 1]);
       const label = a == null && b == null ? 'any rating' : a == null ? `< ${b}` : b == null ? `${a}+` : r.length === 1 ? `${a}s` : `${a}\u2013${b - 1}`;
@@ -721,7 +959,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     const any = pre => ({ t: 'any', plain: true, pre });
     const vs = (a, b) => {
       if (!a.length && !b.length) return [];
-      a.forEach((p, i) => { p.pre = i ? ',' : ''; }); b.forEach((p, i) => { p.pre = i ? ',' : 'vs'; });
+      a.forEach((p, i) => { p.pre = i ? p.join || ',' : ''; }); b.forEach((p, i) => { p.pre = i ? p.join || ',' : 'vs'; });
       return (a.length ? a : [any('')]).concat(b.length ? b : [any('vs')]);
     };
     grp('Matchup', vs(facParts('facs'), facParts('opp')));
@@ -729,15 +967,31 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     grp('ELO', vs(eloParts('elo'), eloParts('oppElo')));
     const plParts = who => F[who].map(id => ({ t: (PLAYER_BY_ID.get(id) || { name: '#' + id }).name, key: who, val: id }));
     grp('Player', vs(plParts('players'), plParts('oppPlayers')));
+    // the Players panel: the finder count first (the game's seats; the user, 2026-09-15), then a finder's picks as
+    // alternatives, its faction and rating after them, the finders joined with +
+    const whoParts = (F.who || []).map(finderOf).flatMap((w, k) => {
+      const parts = w.p.map(id => ({ t: (PLAYER_BY_ID.get(id) || { name: '#' + id }).name, key: 'who', val: k + ':' + id }));
+      if (w.t != null) parts.unshift({ t: 'side ' + w.t, key: 'whoteam', val: String(k) });
+      const done = new Set();
+      for (const side of SIDES) { const ids = FACS.filter(f => f.side === side).map(f => f.id); if (ids.every(id => w.f.includes(id))) { parts.push({ t: 'any ' + side, key: 'whoside', val: k + ':' + side }); ids.forEach(id => done.add(id)); } }
+      for (const id of w.f) if (!done.has(id)) parts.push({ t: shortName(D.factions[id]), key: 'whofac', val: k + ':' + id });
+      if (eloOn(w.e)) parts.push({ t: eloLabel(w.e), key: 'whoelo', val: String(k) });
+      return parts.map((x, i) => ({ ...x, pre: i ? ',' : '' }));
+    }).map((x, i) => (i ? (x.pre ? x : { ...x, pre: '+' }) : { ...x, pre: ':' }));
+    if ((F.who || []).length) grp('Players', [{ t: `${F.who.length} players`, plain: true }].concat(whoParts));
     const list = (k, arr, text, key) => grp(k, arr.map((v, i) => ({ t: text(v), key, val: v, pre: i ? ',' : '' })));
     if (!hidden.has('result')) list('Result', F.result, v => v === 'none' ? 'no record' : v, 'result');
+    if (F.winner != null) grp('Winner', [{ t: F.winner === 'none' ? 'no record' : F.who[F.winner] && F.who[F.winner].t != null ? `side ${F.who[F.winner].t}` : `Player ${F.winner + 1}`, key: 'winner' }]);
     list('Source', F.sources, v => v, 'sources');
+    if (F.gtype) grp('Game type', [{ t: (GTYPES.find(t => t[0] === F.gtype) || [F.gtype, F.gtype])[1], key: 'gtype' }]);
+    if (F.mirror) grp('Mirror', [{ t: 'same factions', key: 'mirror' }]);
     list('Event', F.events, id => id < 0 ? 'no event' : EVENTS.find(e => e.id === id).name, 'events');
     // a long map pick (the picker's "pick all listed") collapses to a count; removing it clears the whole pick
     if (F.maps.length > 6) grp('Map', [{ t: `${F.maps.length} maps`, key: 'allmaps' }]);
     else list('Map', F.maps, id => id < 0 ? 'unknown' : MAPS.find(m => m.id === id).name, 'maps');
     list('Cash', F.cash, v => v === 'other' ? 'other' : fmtCash(+v), 'cash');
     list('Format', F.fmt, v => v, 'fmt');
+    if (F.dfrom || F.dto) grp('Date', [{ t: F.dfrom && F.dto ? `${F.dfrom} to ${F.dto}` : F.dfrom ? `from ${F.dfrom}` : `to ${F.dto}`, key: 'date' }]);
     if (F.tmin !== '' || F.tmax !== '') grp('Length', [{ t: F.tmin !== '' && F.tmax !== '' ? `${F.tmin}\u2013${F.tmax} min` : F.tmin !== '' ? `${F.tmin}+ min` : `under ${F.tmax} min`, key: 'length' }]);
     const without = !$('classes') ? [] : CLASSES.filter(([k]) => !F.classes.includes(k)).map(([k, l]) => ({ t: l, key: 'classes', val: k }));
     without.forEach((p, i) => { p.pre = i ? ',' : ''; });
@@ -756,7 +1010,16 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   }
   function removeFilter({ key, val }) {
     if (key === 'level') F.level = 'all';
+    else if (key === 'winner') F.winner = null;
+    else if (key === 'gtype') F.gtype = null;
+    else if (key === 'mirror') F.mirror = false;
     else if (key === 'length') { F.tmin = ''; F.tmax = ''; }
+    else if (key === 'date') { F.dfrom = ''; F.dto = ''; }
+    else if (key === 'who') { const [k, id] = val.split(':'); F.who[+k].p = F.who[+k].p.filter(x => x !== +id); }
+    else if (key === 'whofac') { const [k, id] = val.split(':'); F.who[+k].f = F.who[+k].f.filter(x => x !== +id); }
+    else if (key === 'whoelo') F.who[+val].e = ['', ''];
+    else if (key === 'whoteam') F.who[+val].t = null;
+    else if (key === 'whoside') { const [k, side] = val.split(':'); const ids = FACS.filter(f => f.side === side).map(f => f.id); F.who[+k].f = F.who[+k].f.filter(id => !ids.includes(id)); }
     else if (key.startsWith('side:')) { const who = key.slice(5); const ids = FACS.filter(f => f.side === val).map(f => f.id); F[who] = F[who].filter(id => !ids.includes(id)); }
     else if (key === 'elo' || key === 'oppElo') F[key] = F[key].filter(k => !val.includes(k));
     else if (key === 'classes') F.classes.push(val);
@@ -766,7 +1029,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     else toggle(F[key], val);
   }
   function clearAll() {
-    Object.assign(F, { facs: [], opp: [], sources: [], tmin: '', tmax: '', elo: [], oppElo: [], result: [], events: [], maps: [], players: [], oppPlayers: [], classes: [...FDEF.classes], merge: 'smart', level: 'all', cash: [], fmt: [], noncombat: false });
+    Object.assign(F, { facs: [], opp: [], sources: [], tmin: '', tmax: '', elo: [], oppElo: [], result: [], events: [], maps: [], players: [], oppPlayers: [], classes: [...FDEF.classes], merge: 'smart', level: 'all', cash: [], fmt: [], noncombat: false, dfrom: '', dto: '', who: [], winner: null, gtype: null, mirror: false });
   }
 
   // --- events ---------------------------------------------------------------
@@ -978,7 +1241,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   }
 
   function bind(onChange, onMain, opts) {
-    hidden = new Set((opts && opts.hide) || []);
+    hidden = new Set((opts && opts.hide) || []); order = (opts && opts.order) || RAIL_ORDER; labels = (opts && opts.labels) || {};
     only = (opts && opts.only) || null; onlyKey = (opts && opts.onlyKey) || null; maskKey = null; MASKS.clear(); FACET_MEMO.clear();   // the page's condition is part of the mask (opts.onlyKey names its state, so a change of it invalidates the cache)
     const changed = () => { persist(); renderRail(); onChange(); };
     api.update = fn => { fn(F); if (F.elo.length || F.oppElo.length) F.level = 'all'; changed(); };   // pages mutate filters through this
@@ -994,8 +1257,9 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
       const d = b.dataset;
       if (d.side) {
         const ids = FACS.filter(f => f.side === d.side).map(f => f.id);
-        const all = ids.every(id => F[d.who].includes(id));
-        F[d.who] = all ? F[d.who].filter(id => !ids.includes(id)) : [...new Set([...F[d.who], ...ids])];
+        const cur = d.k != null ? F.who[+d.k].f : F[d.who], all = ids.every(id => cur.includes(id));
+        const next = all ? cur.filter(id => !ids.includes(id)) : [...new Set([...cur, ...ids])];
+        if (d.k != null) F.who[+d.k].f = next; else F[d.who] = next;
       }
       else if (mapFacetAct(d, b)) return;   // map-list narrowing: no filter change
       else if (d.facs) toggle(F.facs, +d.facs);
@@ -1005,32 +1269,63 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
       else if (d.elo) { toggle(F.elo, d.elo); F.level = 'all'; }
       else if (d.oppelo) { toggle(F.oppElo, d.oppelo); F.level = 'all'; }
       else if (d.result) toggle(F.result, d.result);
-      else if (d.event) toggle(F.events, +d.event);
+      else if (d.event) { toggle(F.events, +d.event); whoQ.e[0] = ''; whoOpen = null; }   // a pick closes the list and clears what was typed, as the finders'
       else if (d.map) toggle(F.maps, +d.map);
       else if (d.player) toggle(F.players, +d.player);
       else if (d.oppplayer) toggle(F.oppPlayers, +d.oppplayer);
+      else if (d.whopick) { toggle(F.who[+d.whopick].p, +d.id); whoQ.p[+d.whopick] = ''; whoOpen = null; }   // a pick closes the list and clears what was typed (the user, 2026-09-15)
+      else if (d.whofac) { toggle(F.who[+d.whofac].f, +d.id); whoQ.f[+d.whofac] = ''; whoOpen = null; }
+      else if (d.addwho) { if (F.who.length < whoCap()) F.who.push({ p: [], f: [], e: ['', ''], t: null }); }
+      else if (d.rmwho) { F.who.splice(+d.rmwho, 1); whoQ.p.splice(+d.rmwho, 1); whoQ.f.splice(+d.rmwho, 1); if (F.winner === +d.rmwho) F.winner = null; else if (F.winner > +d.rmwho) F.winner--; }
+      else if (d.clearwho != null) { F.who[+d.clearwho] = { p: [], f: [], e: ['', ''], t: null }; whoQ.p[+d.clearwho] = ''; whoQ.f[+d.clearwho] = ''; }
       else if (d.cash) toggle(F.cash, d.cash);
       else if (d.fmt) toggle(F.fmt, d.fmt);
+      else if (d.gtype) {   // one type or none; a pick sets the finder count to fit: 1v1 two, a team game four (2v2), an FFA three at least
+        F.gtype = F.gtype === d.gtype ? null : d.gtype;
+        if (F.gtype === '1v1') { F.who = F.who.slice(0, WHO_MIN); whoQ.p.length = whoQ.f.length = Math.min(whoQ.p.length, WHO_MIN); }
+        else if (F.gtype) { const need = Math.min(whoCap(), F.gtype === 'team' ? 4 : 3); while (F.who.length < need) F.who.push({ p: [], f: [], e: ['', ''], t: null }); }
+      }
       else if (d.merge) F.merge = d.merge;
-      else if (d.clear) F[d.clear] = [];
+      else if (d.mirror) F.mirror = !F.mirror;
+      else if (d.clear) { F[d.clear] = d.clear === 'winner' || d.clear === 'gtype' ? null : []; if (d.clear === 'who') F.mirror = false; }
+      else if (d.winner !== undefined) { const v = d.winner === 'none' ? 'none' : +d.winner; F.winner = F.winner === v || (v !== 'none' && wonAt(v)) ? null : v; }   // one finder (its side with it), or none: a second click lets go
+      else if (d.whoteam != null) { const w = F.who[+d.whoteam]; w.t = w.t === d.id ? null : d.id; }
       else if (d.clearLen) { F.tmin = ''; F.tmax = ''; }
+      else if (d.clearDate) { F.dfrom = ''; F.dto = ''; }
       else if (classClick(d)) { /* handled */ }
       else return;
       changed();
     });
+    $('rail').addEventListener('change', e => {
+      if (e.target.id !== 'dfrom' && e.target.id !== 'dto') return;
+      F[e.target.id] = e.target.value || '';
+      if (F.dfrom && F.dto && F.dfrom > F.dto) { if (e.target.id === 'dfrom') F.dto = F.dfrom; else F.dfrom = F.dto; }   // the ends may not cross
+      changed();
+    });
     $('rail').addEventListener('toggle', e => {
       if (e.target.id === 'mapnarrow') { mapPick.open = e.target.open; persistPage('zh-mappick', 1, mapPick); }
+      if (e.target.id === 'morefilters') moreOpen = e.target.open;
     }, true);   // toggle does not bubble
     // the length slider: the labels and the fill follow the thumb; the page renders when it is let go (a render per
     // input event, at hundreds of ms each on the big pages, held the thumb back - the user, 2026-09-14), or 200 ms
     // after the last keyboard step
-    let dragging = false, moved = false;
-    const release = () => { const go = dragging && moved; dragging = moved = false; if (go) { clearTimeout(pending); pending = 0; persist(); onChange(); } };
-    $('rail').addEventListener('pointerdown', e => { if (e.target.id === 'tmin' || e.target.id === 'tmax') { dragging = true; moved = false; } });
+    let dragging = false, moved = false, dragElo = false;   // dragElo: a finder's rating slider, whose release rebuilds the rail (its lists follow the range)
+    const release = () => { const go = dragging && moved; dragging = moved = false; if (go) { clearTimeout(pending); pending = 0; if (dragElo) changed(); else { persist(); onChange(); } } };
+    $('rail').addEventListener('pointerdown', e => { const elo = e.target.dataset.emin != null || e.target.dataset.emax != null; if (e.target.id === 'tmin' || e.target.id === 'tmax' || elo) { dragging = true; moved = false; dragElo = elo; } });
     window.addEventListener('pointerup', release);
     window.addEventListener('pointercancel', release);
+    $('rail').addEventListener('focusin', e => { if (e.target.dataset.cbkey && !whoRefocus) whoListOpen(e.target.dataset.cbkey); });
+    $('rail').addEventListener('keydown', e => {
+      if (!e.target.dataset.cbkey) return;
+      if (e.key === 'Escape') { whoListClose(); e.target.blur(); }
+      else if (e.key === 'Enter') { const first = $('rail').querySelector(`[data-cblist="${e.target.dataset.cbkey}"] .cb-o`); if (first) first.click(); e.preventDefault(); }
+    });
+    document.addEventListener('pointerdown', e => { if (whoOpen && !e.target.closest(`[data-whocb="${whoOpen}"]`)) whoListClose(); });
+    // the pick strip over a box scrolls sideways when it overflows: the wheel drives it, a click on its blank
+    // part is a click on the box under it (it has to take the pointer to scroll)
+    $('rail').addEventListener('wheel', e => { const s = e.target.closest('.cb-picks'); if (s && s.scrollWidth > s.clientWidth) { s.scrollLeft += e.deltaX || e.deltaY; e.preventDefault(); } }, { passive: false });
+    $('rail').addEventListener('click', e => { if (e.target.classList.contains('cb-picks')) { const inp = e.target.parentElement.querySelector('[data-cbkey]'); if (inp) inp.focus(); } });
     $('rail').addEventListener('input', e => {
-      if (e.target.id === 'evq') { evQuery = e.target.value; $('evchips').innerHTML = eventChips(); return; }
       if (e.target.id === 'mapq') { mapQuery = e.target.value; $('mapchips').innerHTML = mapChips(); syncMapAll(); return; }
       if (e.target.dataset.mfrank !== undefined || e.target.dataset.mfsel !== undefined) { mapFacetAct(e.target.dataset, e.target); return; }
       if (e.target.dataset.mapall !== undefined) {   // the box above the list: every listed map in or out of the pick
@@ -1040,6 +1335,14 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
       }
       if (e.target.id === 'plq') { plQuery = e.target.value; $('plchips').innerHTML = playerChips('players'); return; }
       if (e.target.id === 'oplq') { oplQuery = e.target.value; $('oplchips').innerHTML = playerChips('oppPlayers'); return; }
+      if (e.target.dataset.cbkey) { const [kind, k] = e.target.dataset.cbkey.split(':'); whoQ[kind][+k] = e.target.value; whoListOpen(e.target.dataset.cbkey); return; }
+      if (e.target.dataset.emin != null || e.target.dataset.emax != null) {   // a finder's rating slider (in its player list)
+        const k = +(e.target.dataset.emin != null ? e.target.dataset.emin : e.target.dataset.emax);
+        whoEloSync(k, e.target.dataset.emin != null ? 'lo' : 'hi');
+        if (dragging) { moved = true; return; }
+        clearTimeout(pending); pending = setTimeout(() => { pending = 0; changed(); }, 200);
+        return;
+      }
       if (e.target.id !== 'tmin' && e.target.id !== 'tmax') return;
       // thumbs may not cross; the ends of the track mean "no bound"
       // the marks pull a dragged thumb in; the keyboard steps a minute at a time and must be able to walk past them
@@ -1076,7 +1379,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
         + shares.map(p => `<option value="${p}"${sub && Math.abs(p - cur) < .05 ? ' selected' : ''}>${p}%</option>`).join('') + `</select>`;
       $('stamp').prepend(el);
       el.querySelector('.share').addEventListener('change', e => { const v = e.target.value; if (v === 'all') { if (sub) SUB.clear(); } else if (!sub || Math.abs(+v - cur) >= .05) SUB.set(+v); });
-      if (SUB && SUB.asked) document.querySelectorAll('header nav a, header h1 a').forEach(a => a.setAttribute('href', SUB.link(a.getAttribute('href'))));   // the other pages open on the same draw - also from a page too small to draw it (the user, 2026-09-15)
+      if (SUB && SUB.asked) document.querySelectorAll('header nav a, header h1 a, a.xref').forEach(a => a.setAttribute('href', SUB.link(a.getAttribute('href'))));   // the other pages open on the same draw - also from a page too small to draw it (the user, 2026-09-15); a.xref: the cards' links to another page's card
     }
     renderRail();
     onChange();
@@ -1173,7 +1476,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   const api = {
     D, F, CLASSES, CLS_INDEX, CLS_COLOR, SIDES, FACS, SOURCES, EVENTS, MAPS, ELO, eloBucket, eloId, HIGH_ELO, LOW_ELO, highLevel, lowLevel, LEVELS, MERGE,
     LEN_MIN, LEN_MAX, TOTAL_PG, CASH, cashKey, FMTS, shortName, NICK, searchText, searchHit,
-    PLAYERS, PLAYER_BY_ID, pidOf, keyOf, opposition, mask, maskKey: () => (mask(), maskKey), maskDefault, M_SEAT, M_POP, M_MATCH, M_RESULT, M_FACET, M_ALL, inSample, captured, showCaptured, loadPage: loadPageState, persistPage,
+    PLAYERS, PLAYER_BY_ID, pidOf, keyOf, opposition, mask, maskWith, seatOrder, whoCap, mirrorGame, maskKey: () => (mask(), maskKey), maskDefault, M_SEAT, M_POP, M_MATCH, M_RESULT, M_FACET, M_ALL, inSample, captured, showCaptured, loadPage: loadPageState, persistPage,
     $, esc, fmtPct, fmtPct1, fmtInt, fmtMoney, fmtMoneyK, fmtCash, fmtPts, wilson, quant, select, mean,
     chip, seg, facet, renderRail, renderActive, bind, tips, showTip, moveTip, hideTip, exportCard, exportPdf,
     mapFacetControls, mapFacetHit, mapFacetAct, mapFacts, facetCount, mapHit, onMapFacet: null,   // the map narrowing, for a page that draws it too (the map card's pick)
