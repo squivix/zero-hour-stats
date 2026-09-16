@@ -2,7 +2,7 @@
 <title>Zero Hour Stats</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="common.css?v=578575c8">
 <script>document.documentElement.dataset.theme = (function () { try { return localStorage.getItem("zh-theme"); } catch (e) { return null; } })() || "light";</script>
 <style>
   :root { --k-up: #2fb3a6; --k-sci: #d84f9a; --k-pow: #e3c04b; --k-sell: #c8503a; --win: #2f8f5b; --lose: #c8503a;
@@ -373,12 +373,12 @@
 
 <div id="loading" class="loading"><div class="disp">ZERO HOUR <span>STATS</span></div><div class="spin"></div><div class="msg">loading build orders&hellip;</div></div>
 <script>document.querySelector("#loading .spin").style.animationDelay = -(Date.now() % 800) + "ms"; window.ZH_DATASET = 'library'; window.ZH_COLS = ['opening']; window.ZH_COLS_LATER = ['map'];</script>
-<script src="config.js"></script>
-<script src="data.js"></script>
-<script src="common.js"></script>
-<script src="plays.js"></script>
-<script src="builds.js"></script>
-<script src="terrain.js"></script>
+<script src="config.js?v=ecbf1d2c"></script>
+<script src="data.js?v=66bfc719"></script>
+<script src="common.js?v=cf8702f5"></script>
+<script src="plays.js?v=96d7a72d"></script>
+<script src="builds.js?v=097b47b0"></script>
+<script src="terrain.js?v=8fc37e0f"></script>
 <script>
 window.ZH_READY.then(function (Z) {
   const { D, F, CLS_COLOR, TOTAL_GAMES, $, esc, fmtPct, fmtInt, seg, shortName } = Z;

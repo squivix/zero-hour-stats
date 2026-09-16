@@ -2,7 +2,7 @@
 <title>Zero Hour Stats</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="common.css?v=578575c8">
 <style>
   .more-row { display: flex; gap: 8px; justify-content: center; padding: 8px 0 2px; }   /* under the table or bars: 20 more rows a click */
   #chart.more { overflow-y: auto; padding-right: 4px; }   /* past the first page the list keeps its height and scrolls (the user, 2026-09-16: not the whole page) */
@@ -101,9 +101,9 @@
 
 <div id="loading" class="loading"><div class="disp">ZERO HOUR <span>STATS</span></div><div class="spin"></div><div class="msg">loading unit mix&hellip;</div></div>
 <script>document.querySelector("#loading .spin").style.animationDelay = -(Date.now() % 800) + "ms"; window.ZH_DATASET = 'library'; window.ZH_COLS = [];</script>
-<script src="config.js"></script>
-<script src="data.js"></script>
-<script src="common.js"></script>
+<script src="config.js?v=ecbf1d2c"></script>
+<script src="data.js?v=66bfc719"></script>
+<script src="common.js?v=cf8702f5"></script>
 <script>
 window.ZH_READY.then(function (Z) {
   const { D, F, CLASSES, CLS_COLOR, TOTAL_PG, TOTAL_GAMES, $, esc, fmtPct, fmtInt, fmtMoney, fmtMoneyK, seg } = Z;
@@ -294,7 +294,7 @@ window.ZH_READY.then(function (Z) {
   function loadTime() {
     if (timeLoading) return timeLoading;
     timeLoading = new Promise(res => {
-      try { timeW = new Worker('timeworker.js'); } catch (e) { timeErr = e; res(); return; }
+      try { timeW = new Worker('timeworker.js?v=ee2f3f5a'); } catch (e) { timeErr = e; res(); return; }
       timeW.onerror = e => { if (!TIME) { timeErr = new Error(e.message || 'the timeline worker failed'); res(); } for (const r of timeReply.values()) r({ type: 'error', message: e.message || 'the timeline worker failed' }); timeReply.clear(); };
       timeW.onmessage = e => {
         const d = e.data;
