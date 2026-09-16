@@ -14,11 +14,12 @@
   #bo .items { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; min-width: 0; padding: 2px 0; }   /* the chips, as on the Build orders tab */
   #bo .it { display: inline-flex; align-items: center; gap: 5px; padding: 1px 6px; border-radius: 3px; background: var(--ground); border: 1px solid var(--line); font-size: 12px; white-space: nowrap; line-height: 1.5; color: var(--ink); }
   #bo .it i { width: 7px; height: 7px; border-radius: 2px; background: var(--c); flex: none; }
-  #bo .it.none, #bo .it.more { color: var(--muted); border-style: dashed; }   /* more: the pooled row's trailing chip, "then anything" */
+  #bo .it.none { color: var(--muted); border-style: dashed; }
   #bo .it.army { margin-left: auto; }   /* the army's mix set apart on the right, as on the Build orders tab */
   #bo .wr { grid-template-columns: minmax(0, 1fr) 220px 76px; height: auto; min-height: 26px; }
   #bo .wr .k { white-space: normal; overflow: visible; }
   #bo .wr.ax { min-height: 14px; }
+  #bo .wr:not(.ax):hover { background: var(--raised); box-shadow: 0 0 0 4px var(--raised); border-radius: 3px; }   /* the build under the pointer lit, bled 4px past its box - this card only (the user, 2026-09-16) */
   #bo.long .rows { max-height: 640px; overflow-y: auto; padding-right: 6px; scrollbar-gutter: stable; }   /* past the top rows the list scrolls */
   #bo.long .rows .wr { content-visibility: auto; contain-intrinsic-size: auto 30px; }
   #bo .rows .bmore { display: flex; gap: 14px; padding: 6px 0 2px; font-size: 12px; color: var(--muted); }
@@ -774,9 +775,9 @@ window.ZH_READY.then(function (Z) {
   const B_TOP = 12, B_MORE = 50;
   let B_N = B_TOP, BO = null;   // rows shown; the list drawn, for "show more" to extend without a render: {top, N, label, at}
   // the rows: a build with MIN_READ games stands on its own; a thinner one is pooled with its siblings into the
-  // longest opening they share that has MIN_READ games, a row worded by that prefix and a trailing "..." chip (the
-  // user, 2026-09-16: a popular build with many variations was split over thin rows and never reached the win-rate
-  // sort). The keys are a path (chip|chip|...), so a trie over them: a node with a thick child splits it off and
+  // longest opening they share that has MIN_READ games, a row worded by that prefix alone - no marker, the folding
+  // is in the chips' hover title (the user, 2026-09-16: a popular build with many variations was split over thin
+  // rows and never reached the win-rate sort; a trailing "..." chip read as a second row). The keys are a path (chip|chip|...), so a trie over them: a node with a thick child splits it off and
   // keeps the rest (its exact seats + thin tails) as its own row; a node with none is one row, all its tails in
   function poolBuilds(builds) {
     const mk = () => ({ g: 0, w: 0, nl: 0, ch: new Map(), rep: -1, rg: 0, ex: -1, eg: 0 });   // nl = leaves at or below; rep = the heaviest leaf strictly below (worded, cut to the depth); ex = the leaf here
@@ -822,15 +823,15 @@ window.ZH_READY.then(function (Z) {
     const list = !wr ? top : a.bwr || (a.bwr = top.map(r => [r, lo(r)]).sort(([x, xl], [y, yl]) => yl - xl || y[1][0] - x[1][0]).map(([r]) => r));
     if (!top.length) { $('bo').innerHTML = '<div class="empty">No games with a recorded result match these filters.</div>'; $('bo-note').textContent = ''; return; }
     const N = top.reduce((s, [, v]) => s + v[0], 0), shown = list.slice(0, B_N), m = new Map(shown.map(([id, v]) => [String(id), v]));
-    // a row's chips: its representative seat's, cut to the row's depth when pooled, then the "..." chip for the tails folded in
+    // a row's chips: its representative seat's, cut to the row's depth when pooled; the folding is told in the chips' title
     const chipsOf = r => { const [p, g] = BREP[r.rep], ch = BD.chipsOf(buildDesc(p, g), bSide(p), bOn, true); return r.pooled ? ch.slice(0, r.depth) : ch; };
     const bins = shown.map(([i]) => [String(i), i]);
-    const more = r => r.pooled ? `<span class="it more" title="then anything: ${fmtInt(r.fl)} thinner build${r.fl === 1 ? '' : 's'} (under ${MIN_READ} games each, ${fmtInt(r.fg)} in all) sharing these chips, pooled in${r.g > r.fg ? ` with the ${fmtInt(r.g - r.fg)} that stop here` : ''}">${r.depth ? '\u2026' : 'any other build \u2026'}</span>` : '';
-    const label = (k, i) => i < 0 ? `<span class="items"><span class="it none"><i></i>every other build</span></span>` : `<span class="items">${chipsOf(R[i]).map(it => `<span class="it${it.none ? ' none' : ''}${it.part === 'units' ? ' army' : ''}" style="--c:${it.c}"><i></i>${esc(BD.cap(it.n))}</span>`).join('')}${more(R[i])}</span>`;
+    const pooledT = r => r.pooled ? ` title="${r.depth ? 'this opening and what followed it' : 'every build'}: ${fmtInt(r.fl)} thinner build${r.fl === 1 ? '' : 's'} (under ${MIN_READ} games each, ${fmtInt(r.fg)} in all) counted here${r.g > r.fg ? ` with the ${fmtInt(r.g - r.fg)} that stop at these chips` : ''}"` : '';
+    const label = (k, i) => i < 0 ? `<span class="items"><span class="it none"><i></i>every other build</span></span>` : `<span class="items"${pooledT(R[i])}>${chipsOf(R[i]).map(it => `<span class="it${it.none ? ' none' : ''}${it.part === 'units' ? ' army' : ''}" style="--c:${it.c}"><i></i>${esc(BD.cap(it.n))}</span>`).join('') || '<span class="it none"><i></i>any other build</span>'}</span>`;
     $('bo').innerHTML = `<div class="facets" style="grid-template-columns: 1fr">${facet(`Builds<small class="sp">${fmtInt(top.length)} rows from ${fmtInt(a.builds.size)} distinct, the most played ${fmtPct(top[0][1][0] / N)} of ${fmtInt(N)} player-games</small>`, bins, m, label)}</div>`;
     BO = { top: list, label, at: shown.length };
     buildsTail();
-    $('bo-note').textContent = `bars from 50%: right wins, left loses; whiskers are 95% intervals, faint under ${MIN_READ} games; the count is the build\u2019s player-games \u00b7 the builds ${wr ? `by the lower end of the win rate\u2019s 95% interval among those with ${MIN_READ}+ games (a sure 60% ranks above a lucky 90%), the thinner ones after by games` : 'by games, most first'}, the rest folded into one row - show more adds ${B_MORE} at a time and the list scrolls \u00b7 a build with under ${MIN_READ} games is pooled with its siblings into the longest opening they share that has ${MIN_READ}+, a row ending in \u2026 (hover it for what was folded) \u00b7 a build is described as on the Build orders tab by the clock in the title: the builders out of the command center, the supplies before any play left, the gatherers, the opening group (what the starting cash bought) then each later structure, expansion or play in order, and the army\u2019s mix; switch parts off for coarser builds \u00b7 correlation, not cause`;
+    $('bo-note').textContent = `bars from 50%: right wins, left loses; whiskers are 95% intervals, faint under ${MIN_READ} games; the count is the build\u2019s player-games \u00b7 the builds ${wr ? `by the lower end of the win rate\u2019s 95% interval among those with ${MIN_READ}+ games (a sure 60% ranks above a lucky 90%), the thinner ones after by games` : 'by games, most first'}, the rest folded into one row - show more adds ${B_MORE} at a time and the list scrolls \u00b7 a build with under ${MIN_READ} games is counted under the longest opening it shares with ${MIN_READ}+ others, so a short row is that opening and whatever followed (hover its chips for what was folded) \u00b7 a build is described as on the Build orders tab by the clock in the title: the builders out of the command center, the supplies before any play left, the gatherers, the opening group (what the starting cash bought) then each later structure, expansion or play in order, and the army\u2019s mix; switch parts off for coarser builds \u00b7 correlation, not cause`;
   }
   // the list's tail: the rest as one row, then the show more / top 12 controls - redrawn as pages are added
   function buildsTail() {
