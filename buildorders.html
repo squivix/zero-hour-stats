@@ -167,9 +167,8 @@
   table.ex td.vs { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; text-align: center; }
   table.ex td.map, table.ex td.src { text-align: left; color: var(--ink-2); }
   table.ex td.src { color: var(--muted); font-size: 12px; }
-  table.ex td.src a, table.ex td.rep a { color: var(--accent); text-decoration: none; }
-  table.ex td.src a:hover, table.ex td.rep a:hover { text-decoration: underline; }
-  table.ex td.rep { font-size: 12px; }
+  table.ex td.src a { color: var(--accent); text-decoration: none; }
+  table.ex td.src a:hover { text-decoration: underline; }
   .focus-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 14px; }
   .focus-h .it { font-size: 13px; padding: 4px 10px; }
   .focus-h .d { color: var(--muted); }
@@ -939,7 +938,7 @@ window.ZH_READY.then(function (Z) {
   // median clock, and a gap notes how often the pair came the other way round), then the chain in its order
   // --- the examples (the user, 2026-09-20): the games that played the build in focus, one row per player-game -
   // the seat that played it, its opponent, the map, the length, the source with the match on Strata linked
-  // (GeneralsOnline games: the Strata id table, fetched on first use) and the game in the Replays tab.
+  // (GeneralsOnline games: the Strata id table, fetched on first use); a replay viewer here once the extraction is done.
   // The highest-rated seats first by default: the best examples of the build; or the latest
   const EX_SORTS = [['rating', 'Rating'], ['date', 'Date']];
   const EX_PAGE = 10;
@@ -963,9 +962,9 @@ window.ZH_READY.then(function (Z) {
     withIt.sort(S.exSort === 'date' ? byDate : byRating);
     const rows = withIt.slice(0, EX_ROWS);
     const seatCell = (p, si, j) => `<td class="who" data-si="${si}" data-j="${j}"><i class="res ${resOf(p)}">${p.w === 1 ? 'W' : p.w === 0 ? 'L' : ''}</i><b>${esc(plName(p))}</b><small>${esc(facShort(p))}${p.e != null ? ` \u00b7 ${p.e}` : ''}</small></td>`;
-    el.innerHTML = `<div class="tbl-wrap"><table class="ex"><thead><tr><th class="l">Date</th><th class="l">Played it</th><th></th><th class="l">Against</th><th class="l">Map</th><th>Length</th><th class="l">Source</th><th class="l"></th></tr></thead><tbody>`
+    el.innerHTML = `<div class="tbl-wrap"><table class="ex"><thead><tr><th class="l">Date</th><th class="l">Played it</th><th></th><th class="l">Against</th><th class="l">Map</th><th>Length</th><th class="l">Source</th></tr></thead><tbody>`
       + rows.map((s, i) => { const g = s.g, j = g.p.indexOf(s.p), opp = g.p.map((p, k) => [p, k]).filter(([, k]) => k !== j);
-        return `<tr><td class="d l">${esc(g.d || '\u2014')}</td>${seatCell(s.p, i, j)}<td class="vs">vs</td>${opp.length ? opp.map(([p, k]) => seatCell(p, i, k)).join('') : '<td></td>'}<td class="map">${esc(MAP_NAME(g) || '\u2014')}</td><td class="len">${fmtClock(g.t)}</td><td class="src" data-src="${esc(g.s)}" data-m="${esc(String(g.m))}">${esc(SRC[g.s] || g.s)} #${esc(String(g.m))}</td><td class="rep"><a href="replay.html?g=${encodeURIComponent(String(g.m))}" title="the game in the Replays tab">replay \u2197</a></td></tr>`; }).join('')
+        return `<tr><td class="d l">${esc(g.d || '\u2014')}</td>${seatCell(s.p, i, j)}<td class="vs">vs</td>${opp.length ? opp.map(([p, k]) => seatCell(p, i, k)).join('') : '<td></td>'}<td class="map">${esc(MAP_NAME(g) || '\u2014')}</td><td class="len">${fmtClock(g.t)}</td><td class="src" data-src="${esc(g.s)}" data-m="${esc(String(g.m))}">${esc(SRC[g.s] || g.s)} #${esc(String(g.m))}</td></tr>`; }).join('')
       + '</tbody></table></div>' + (withIt.length > rows.length ? '<div class="seq-more"><button class="chip" data-exmore="1">Show more</button></div>' : '');
     $('card-ex').hidden = false;
     Z.tips(el, 'td.who b', b => { const td = b.parentElement, p = rows[+td.dataset.si].g.p[+td.dataset.j]; return `<b>${esc(plName(p))}</b><br>${esc(p.f != null && D.factions[p.f] ? D.factions[p.f].name : 'unknown faction')}<br>${p.e != null ? `rating ${p.e}` : 'unrated'} \u00b7 ${p.w === 1 ? 'won' : p.w === 0 ? 'lost' : 'no result'}`; });
