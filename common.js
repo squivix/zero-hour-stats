@@ -1471,6 +1471,18 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     if (window.performance && performance.mark) performance.mark('zh-ready');   // first paint done: performance.getEntriesByName('zh-ready')
   }
 
+  // --- GeneralsOnline matches on Strata ------------------------------------------
+  // the catalog's match id is its own; Strata's comes from the id table beside the data, strata-ids.json.gz ({catalog id: Strata id}),
+  // fetched once on first use and null when it is not there; STRATA_URL.match(id) / .player(id) are its pages
+  const STRATA = 'https://strata.gamereplays.org';
+  const STRATA_URL = { match: id => `${STRATA}/zh/match/${id}`, player: id => `${STRATA}/zh/player/${id}` };
+  let STRATA_IDS = null;
+  const strataIds = () => STRATA_IDS || (STRATA_IDS = (async () => {
+    const r = await fetch((window.ZH_DATA_BASE || 'data/') + 'strata-ids.json.gz'); if (!r.ok) throw new Error(r.status);
+    let b = r.body; if (!/gzip/.test(r.headers.get('content-encoding') || '')) b = b.pipeThrough(new DecompressionStream('gzip'));
+    return JSON.parse(await new Response(b).text());
+  })().catch(() => null));
+
   // --- tooltip --------------------------------------------------------------
   function moveTip(e) {
     const tip = $('tip'); const w = tip.offsetWidth, h = tip.offsetHeight;
@@ -1497,7 +1509,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     $, esc, fmtPct, fmtPct1, fmtInt, fmtMoney, fmtMoneyK, fmtCash, fmtPts, wilson, quant, select, mean,
     chip, seg, facet, renderRail, renderActive, bind, tips, showTip, moveTip, hideTip, exportCard, exportPdf,
     mapFacetControls, mapFacetHit, mapFacetAct, mapFacts, facetCount, mapHit, onMapFacet: null,   // the map narrowing, for a page that draws it too (the map card's pick)
-    later, task, chunked, working, workingAt, memo, veilDown, progressHTML, progressSet,
+    later, task, chunked, working, workingAt, memo, veilDown, progressHTML, progressSet, strataIds, STRATA_URL,
   };
   window.ZH = api;
   if (window.performance && performance.mark) performance.mark('zh-indexed');   // seats and templates precomputed

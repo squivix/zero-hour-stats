@@ -153,6 +153,23 @@
   .bsteps .bgap .g b { font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; }
   .bsteps .bgap .g .flip { color: var(--warn, var(--muted)); }
   .bsteps .bgap .g::before { content: '\2193'; color: var(--line-2, var(--line)); }
+  /* the examples card: the games that played the build in focus, a row per player-game in the Replays tab's list
+     idiom - the seat that played it first, the result in a fixed slot, the faction under the name */
+  #card-ex[hidden] { display: none; }   /* only with a build in focus (the user, 2026-09-20) */
+  #ex .tbl-wrap { max-height: 320px; overflow-y: auto; border: 1px solid var(--line); border-radius: 3px; scrollbar-width: thin; }   /* about eight rows (the user, 2026-09-20: shorter) */
+  table.ex thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; box-shadow: 0 1px 0 var(--line); }
+  table.ex td.who { text-align: left; }
+  table.ex td.who b { font-weight: 600; color: var(--ink); }
+  table.ex td.who small { display: block; color: var(--muted); margin-top: 1px; line-height: 1.2; padding-left: 22px; }
+  table.ex td.who .res { display: inline-block; width: 22px; font-style: normal; font-weight: 700; font-size: 12px; }
+  table.ex td.who .res.won { color: var(--win); } table.ex td.who .res.lost { color: var(--lose); }
+  table.ex td.len, table.ex td.e { font-variant-numeric: tabular-nums; }
+  table.ex td.vs { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; text-align: center; }
+  table.ex td.map, table.ex td.src { text-align: left; color: var(--ink-2); }
+  table.ex td.src { color: var(--muted); font-size: 12px; }
+  table.ex td.src a, table.ex td.rep a { color: var(--accent); text-decoration: none; }
+  table.ex td.src a:hover, table.ex td.rep a:hover { text-decoration: underline; }
+  table.ex td.rep { font-size: 12px; }
   .focus-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 14px; }
   .focus-h .it { font-size: 13px; padding: 4px 10px; }
   .focus-h .d { color: var(--muted); }
@@ -284,6 +301,18 @@
       <div id="focus"></div>
       <div class="foot"><span id="focus-note"></span></div>
     </section>
+    <!-- the games that played the build in focus: a list with a link to the match on Strata for now; a replay
+         viewer like the Replays tab's once the extraction is done (the user, 2026-09-20) -->
+    <section class="card" id="card-ex" hidden>
+      <div class="card-h">
+        <h2 class="disp">Examples</h2>
+        <span class="chip mapbuild" id="exbuild" aria-pressed="true"></span>
+        <div class="spacer"></div>
+        <div class="ctl"><span class="lbl">Sort</span><div class="seg" id="exsort"></div></div>
+      </div>
+      <div id="ex"></div>
+      <div class="foot"><span id="ex-note"></span></div>
+    </section>
     <section class="card" id="card-map">
       <div class="card-h">
         <button class="snap back" type="button" id="mapback" data-mapback="1" title="clear the Map filter: back to every map of the selection" hidden>&larr; All Maps</button>
@@ -375,7 +404,7 @@
 <script>document.querySelector("#loading .spin").style.animationDelay = -(Date.now() % 800) + "ms"; window.ZH_DATASET = 'library'; window.ZH_COLS = ['opening']; window.ZH_COLS_LATER = ['map'];</script>
 <script src="config.js?v=ecbf1d2c"></script>
 <script src="data.js?v=66bfc719"></script>
-<script src="common.js?v=cf8702f5"></script>
+<script src="common.js?v=4cfcfc3e"></script>
 <script src="plays.js?v=96d7a72d"></script>
 <script src="builds.js?v=097b47b0"></script>
 <script src="terrain.js?v=8fc37e0f"></script>
@@ -411,7 +440,7 @@ window.ZH_READY.then(function (Z) {
   const DEPTHS = [4, 6, 8, 10];
   const INSTANCES = [[1, '1st'], [2, '2nd'], [3, '3rd'], [4, '4th'], [5, '5th'], [6, '6th'], [7, '7th'], [8, '8th'], [9, '9th'], [10, '10th']];
   const DEFAULT = { by: 180, fu: 2, cls: 'infantry', move: 180, fwd: 50, parts: ['bld', 'sup', 'prod', 'move', 'units'], table: false, sort: 'games', window: 300, k: 6, prefix: [], instance: 1, tmTable: false,
-    mapKinds: ['supply', 'production', 'defense'], mapT: [], mapOpen: null, mapDraw: 'heat', mapFlow: 'lines', mapGrain: 28, mapPal: 'relief', mapTint: 'grey', mapSpotR: 6, mapBlur: 12, mapSp: -1, mapBy: 180, focus: null, mapBuild: true };   // the map card: the kinds shown by default (Supply Centers, Production Buildings, Defences - the user, 2026-09-14; CC is off besides: every game puts one on the same cell at 0:00, and it hid the rest), the structures shown (empty = every one), the spawn (-1 = all)
+    mapKinds: ['supply', 'production', 'defense'], mapT: [], mapOpen: null, mapDraw: 'heat', mapFlow: 'lines', mapGrain: 28, mapPal: 'relief', mapTint: 'grey', mapSpotR: 6, mapBlur: 12, mapSp: -1, mapBy: 180, focus: null, mapBuild: true, exSort: 'rating' };   // the map card: the kinds shown by default (Supply Centers, Production Buildings, Defences - the user, 2026-09-14; CC is off besides: every game puts one on the same cell at 0:00, and it hid the rest), the structures shown (empty = every one), the spawn (-1 = all)
   const S = Z.loadPage('zh-bo-page', 2, DEFAULT);
   S.fwd = DEFAULT.fwd;   // the forward line is fixed (the control went, 2026-09-14)
   if (!Array.isArray(S.prefix)) S.prefix = [];
@@ -908,6 +937,49 @@ window.ZH_READY.then(function (Z) {
   // same chips, so the steps are read off the first and each player-game contributes its own clock per step - the
   // opening's supplies and structures one by one (the group's order differs by game: the steps are ordered by their
   // median clock, and a gap notes how often the pair came the other way round), then the chain in its order
+  // --- the examples (the user, 2026-09-20): the games that played the build in focus, one row per player-game -
+  // the seat that played it, its opponent, the map, the length, the source with the match on Strata linked
+  // (GeneralsOnline games: the Strata id table, fetched on first use) and the game in the Replays tab.
+  // The highest-rated seats first by default: the best examples of the build; or the latest
+  const EX_SORTS = [['rating', 'Rating'], ['date', 'Date']];
+  const EX_PAGE = 10;
+  let EX_ROWS = EX_PAGE, EX_KEY = '';
+  const seatsOfFocus = (seats, fo) => seats.filter(s => { const ck = ckOf(s); return fo.row ? ck === fo.key : ck.split('|').includes(fo.key); });
+  const SRC = { generalsonline: 'GeneralsOnline', gamereplays: 'GameReplays', gentool: 'GenTool' };
+  const plName = p => p.pl != null && D.players[p.pl] ? D.players[p.pl].n : 'unknown';
+  const facShort = p => p.f != null && D.factions[p.f] ? shortName(D.factions[p.f]) : '?';
+  const fmtClock = t => { if (t == null) return '\u2014'; const sec = Math.round(t * 60), h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, ss = String(sec % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`; };
+  const MAP_NAME = g => g.mp != null && D.maps[g.mp] ? D.maps[g.mp].n : '';
+  const resOf = p => p.w === 1 ? 'won' : p.w === 0 ? 'lost' : 'none';
+  function renderExamples(seats) {
+    const el = $('ex'), note = $('ex-note'), fo = S.focus;
+    if (!fo) { el.innerHTML = ''; note.textContent = ''; $('exbuild').innerHTML = ''; return; }   // the card is hidden without a focus
+    const withIt = seatsOfFocus(seats, fo);
+    $('exbuild').innerHTML = `<span class="sw" style="--c:var(--accent)"></span><span>${esc(fo.n)}</span><small>${fmtInt(withIt.length)}</small>`;
+    $('exbuild').title = `the ${fo.row ? 'build' : 'chip'} in focus - ${fmtInt(withIt.length)} player-games`;
+    if (fo.key !== EX_KEY) { EX_KEY = fo.key; EX_ROWS = EX_PAGE; }   // a new focus starts at the top of its list
+    const byDate = (a, b) => (b.g.d || '').localeCompare(a.g.d || '') || (b.g.m || 0) - (a.g.m || 0);
+    const byRating = (a, b) => (b.p.e != null ? b.p.e : -1) - (a.p.e != null ? a.p.e : -1) || byDate(a, b);
+    withIt.sort(S.exSort === 'date' ? byDate : byRating);
+    const rows = withIt.slice(0, EX_ROWS);
+    const seatCell = (p, si, j) => `<td class="who" data-si="${si}" data-j="${j}"><i class="res ${resOf(p)}">${p.w === 1 ? 'W' : p.w === 0 ? 'L' : ''}</i><b>${esc(plName(p))}</b><small>${esc(facShort(p))}${p.e != null ? ` \u00b7 ${p.e}` : ''}</small></td>`;
+    el.innerHTML = `<div class="tbl-wrap"><table class="ex"><thead><tr><th class="l">Date</th><th class="l">Played it</th><th></th><th class="l">Against</th><th class="l">Map</th><th>Length</th><th class="l">Source</th><th class="l"></th></tr></thead><tbody>`
+      + rows.map((s, i) => { const g = s.g, j = g.p.indexOf(s.p), opp = g.p.map((p, k) => [p, k]).filter(([, k]) => k !== j);
+        return `<tr><td class="d l">${esc(g.d || '\u2014')}</td>${seatCell(s.p, i, j)}<td class="vs">vs</td>${opp.length ? opp.map(([p, k]) => seatCell(p, i, k)).join('') : '<td></td>'}<td class="map">${esc(MAP_NAME(g) || '\u2014')}</td><td class="len">${fmtClock(g.t)}</td><td class="src" data-src="${esc(g.s)}" data-m="${esc(String(g.m))}">${esc(SRC[g.s] || g.s)} #${esc(String(g.m))}</td><td class="rep"><a href="replay.html?g=${encodeURIComponent(String(g.m))}" title="the game in the Replays tab">replay \u2197</a></td></tr>`; }).join('')
+      + '</tbody></table></div>' + (withIt.length > rows.length ? '<div class="seq-more"><button class="chip" data-exmore="1">Show more</button></div>' : '');
+    $('card-ex').hidden = false;
+    Z.tips(el, 'td.who b', b => { const td = b.parentElement, p = rows[+td.dataset.si].g.p[+td.dataset.j]; return `<b>${esc(plName(p))}</b><br>${esc(p.f != null && D.factions[p.f] ? D.factions[p.f].name : 'unknown faction')}<br>${p.e != null ? `rating ${p.e}` : 'unrated'} \u00b7 ${p.w === 1 ? 'won' : p.w === 0 ? 'lost' : 'no result'}`; });
+    const rated = withIt.filter(s => s.p.e != null).length;
+    note.textContent = `${fmtInt(withIt.length)} player-game${withIt.length === 1 ? '' : 's'} played ${fo.row ? 'this build' : 'it'}, ${fmtInt(rows.length)} shown${S.exSort === 'date' ? ', the latest first' : `, the highest-rated first${rated < withIt.length ? ` (${fmtInt(withIt.length - rated)} unrated, last)` : ''}`} \u00b7 the source links the match on Strata (GeneralsOnline games)`;
+  }
+  // the Strata links, once the id table is here: the source cells of GeneralsOnline games become anchors. The
+  // table comes after the first paint; a memoized card puts its cells back plain, so this runs after every render
+  let STRATA_MAP = null;
+  function exLinks() {
+    const patch = () => { if (!STRATA_MAP) return; for (const td of $('ex').querySelectorAll('td.src[data-src="generalsonline"]')) { const sm = STRATA_MAP[td.dataset.m]; if (sm && !td.querySelector('a')) td.innerHTML = `<a href="${Z.STRATA_URL.match(sm)}" target="_blank" rel="noopener" title="the match on Strata (#${sm})">${td.innerHTML}</a>`; } };
+    if (STRATA_MAP) patch(); else Z.strataIds().then(ids => { STRATA_MAP = ids; patch(); });
+  }
+
   function buildSteps(withIt) {
     const d0 = withIt[0].d, steps = [];   // {n, part, c, t: []} in display order
     // the builders out of the CC, one step each after the starting one(s) ("2nd dozer"); "10+": the first ten
@@ -1575,6 +1647,7 @@ window.ZH_READY.then(function (Z) {
   });
   $('mapwrap').addEventListener('click', e => { const b = e.target.closest('button'); if (b && b.dataset.mapto === undefined) Z.mapFacetAct(b.dataset, b); });
   const MAP_LAST = { key: null }, MAP_CELLS = { key: null, cells: null };   // the drawing's key, and the cells' own (a slider redraws; the cells stay)
+  let MAP_REQ = 0;   // the map requests, counted: a raster arriving for a map no longer asked for is dropped
   let MAP_COL = false;
   {
     const tick = setInterval(() => { const el = document.querySelector('#mapwrap .reading'); if (el) Z.progressSet(el, 'loading the map data\u2026', (D.laterProgress || {}).map || 0); }, 300);
@@ -1623,13 +1696,22 @@ window.ZH_READY.then(function (Z) {
       $('map-note').textContent = ''; $('maptitle').textContent = '';
       return;
     }
-    const old = wrap.querySelector('.empty'); if (old) old.remove();
+    const old = wrap.querySelector('.empty'); if (old) old.remove();   // the pick, the spinner or a no-terrain note
     if (!MAP_COL) {   // the placements' cells come in a column of their own after the first paint (data.js ZH_COLS_LATER)
       MAP = null; MAP_LAST.key = MAP_CELLS.key = null; $('mapcv').hidden = true; $('mapkinds').hidden = $('mapt').hidden = $('maptwrap').hidden = true;
       wrap.insertAdjacentHTML('beforeend', `<div class="empty reading">${Z.progressHTML('loading the map data\u2026', (D.laterProgress || {}).map || 0)}</div>`);
       $('map-note').textContent = ''; $('maptitle').innerHTML = esc(M.name); return;
     }
-    $('mapcv').hidden = false; $('mapkinds').hidden = $('mapt').hidden = false;
+    // another map than the one on show: the last one goes and a spinner holds its place until the raster is here
+    // (the user, 2026-09-20: the old map stayed up while the next loaded); a later request supersedes this one
+    const req = ++MAP_REQ;
+    if (!MAP || MAP.crc !== M.crc) {
+      const cv = $('mapcv'), h = cv.hidden ? 0 : cv.clientHeight;
+      cv.hidden = true; MAP = null; MAP_LAST.key = MAP_CELLS.key = null;
+      $('mapkinds').innerHTML = ''; $('mapt').innerHTML = ''; $('maplegend').innerHTML = '';
+      $('mapkinds').hidden = $('mapt').hidden = $('maptwrap').hidden = true;
+      wrap.insertAdjacentHTML('beforeend', `<div class="empty reading" style="min-height:${Math.max(120, h)}px">${Z.progressHTML(`loading ${M.name}\u2026`)}</div>`);
+    }
     $('maptitle').innerHTML = `${esc(M.name)} <small>(by ${fmtT(S.mapBy)})</small>`;
     // the cells' key: what mapCells reads (the entry points of the raids are cells only with the raids on and drawn as entries);
     // the drawing's key adds what drawMap reads. A slider (blur, grouping, grain) changes only the second, so the cells
@@ -1637,9 +1719,12 @@ window.ZH_READY.then(function (Z) {
     const ck = [M.id, S.mapBy, S.mapKinds.join(','), S.mapT.join(','), S.mapSp, MAP_KIND_ON('sorties') && MAP_FLOW() === 'entry', seatsKey(), N, MAP_BUILD ? S.focus.key : ''].join('|');
     const key = [ck, S.mapOpen, S.mapDraw, MAP_FLOW(), MAP_GRAIN(), MAP_PAL(), MAP_TINT(), S.mapSpotR, S.mapBlur, isLight()].join('|');
     Promise.all([raster(M.crc), raids(M.crc)]).then(([R, RD]) => {
+      if (req !== MAP_REQ) return;
+      const rd = wrap.querySelector('.empty.reading'); if (rd) rd.remove();
       if (!R) { $('mapkinds').innerHTML = ''; $('mapt').innerHTML = ''; $('mapkinds').hidden = $('mapt').hidden = $('maptwrap').hidden = true; $('mapcv').hidden = true; wrap.insertAdjacentHTML('beforeend', `<div class="empty">no terrain for ${esc(M.name)} - its map file is not among the maps installed for resim</div>`); $('map-note').textContent = ''; return; }
       if (MAP_LAST.key === key && MAP) return;
       MAP_LAST.key = key;
+      $('mapcv').hidden = false; $('mapkinds').hidden = false;
       const t0 = performance.now();
       if (MAP_CELLS.key !== ck) { MAP_CELLS.cells = mapCells(seats, R, RD); MAP_CELLS.key = ck; }
       const cells = MAP_CELLS.cells;
@@ -1680,7 +1765,7 @@ window.ZH_READY.then(function (Z) {
       }
       const { scale, spots } = drawMap(R, cells);
       console.debug(`map: ${Math.round(performance.now() - t0)} ms, ${cells.X.length} cells, ${cells.paths.length} paths, ${new Set(cells.CI).size} colours`);
-      MAP = { R, cells, scale, spots, N: S.mapSp >= 0 ? spawns.get(S.mapSp) || 0 : N };
+      MAP = { crc: M.crc, R, cells, scale, spots, N: S.mapSp >= 0 ? spawns.get(S.mapSp) || 0 : N };
       // the legend: the scale; the chips above are the colours
       $('maplegend').innerHTML = cells.X.length ? `${spots ? '<span>fewer games</span><b style="width:6px;height:6px"></b><b style="width:14px;height:14px"></b><span>more</span>' : '<span>few</span><i></i><span>many</span>'}` : '';
       const per = MAP.N ? cells.X.length / MAP.N : 0;
@@ -1784,6 +1869,7 @@ window.ZH_READY.then(function (Z) {
     seg($('descsort'), [['games', 'Most played'], ['wr', 'Win rate']], S.sort, 'data-descsort');
     $('by-2').innerHTML = $('by-3').innerHTML = $('by-4').innerHTML = $('by').innerHTML;   // every "By" control shares S.by; the map card's clock is its own
     $('clock-1').textContent = $('clock-2').textContent = $('clock-focus').textContent = 'by ' + fmtT(S.by);   // the focus card reads the same clock as the builds
+    seg($('exsort'), EX_SORTS, S.exSort, 'data-exsort');
     renderMapClock(); $('clock-map').textContent = 'by ' + fmtT(S.mapBy);
     seg($('ucls'), [['infantry', 'Infantry'], ['vehicle', 'Vehicles'], ['aircraft', 'Aircraft']], S.cls, 'data-ucls');
     seg($('window'), WINDOWS, S.window, 'data-window');
@@ -1796,7 +1882,7 @@ window.ZH_READY.then(function (Z) {
   // what each card reads: the description cards its controls (Describe by, the clocks),
   // the sequence cards the window, k, the path, the instance and their table switches; a card re-renders when
   // its inputs changed or the selection did (LAST holds the inputs of the last render)
-  const LAST = { desc: null, tiles: null, mirror: null, seq: null, focus: null };
+  const LAST = { desc: null, tiles: null, mirror: null, seq: null, focus: null, ex: null };
   // a card's render memoized on its key - the selection and the controls it reads: while it runs, what it writes
   // into the page (the elements it names) and the tooltips it binds (Z.tips) are recorded, and the same key coming
   // round again (a filter toggled off, a control switched back) puts them back without the pass over the seats -
@@ -1893,9 +1979,12 @@ window.ZH_READY.then(function (Z) {
     card('timings', [sk, S.instance, S.tmTable].join('|'), ['timings', 'tm-note'], () => renderTimings(seats));
     card('marks', sk, ['marks', 'mk-note'], () => renderMarks(seats));
     card('trio', sk, ['trio'], () => renderTrio(seats));
-    // the map draws the build in focus alone while its filter chip stands (renderFocus may have just let the focus go)
+    // the examples: the games of the build in focus (renderFocus may have just let the focus go)
+    card('ex', [sk, ckStamp(), S.focus ? S.focus.key : '', S.exSort, EX_ROWS].join('|'), ['ex', 'ex-note', 'exbuild'], () => renderExamples(seats));
+    $('card-ex').hidden = !S.focus; exLinks();
+    // the map draws the build in focus alone while its filter chip stands
     MAP_BUILD = !!(S.focus && S.mapBuild);
-    if (MAP_BUILD) { const fo = S.focus; MAP_SEATS = seats.filter(s => { const ck = ckOf(s); return fo.row ? ck === fo.key : ck.split('|').includes(fo.key); }); }
+    if (MAP_BUILD) MAP_SEATS = seatsOfFocus(seats, S.focus);
     const mb = $('mapbuild'); mb.hidden = !MAP_BUILD;
     if (MAP_BUILD) { mb.innerHTML = `<span class="sw" style="--c:var(--accent)"></span><span>${esc(S.focus.n)}</span><small>${fmtInt(MAP_SEATS.length)} \u00b7 \u2715</small>`; mb.title = `the map draws the ${S.focus.row ? 'build' : 'chip'} in focus only - ${fmtInt(MAP_SEATS.length)} player-games; click to draw the whole selection again`; }
     renderMap(MAP_SEATS);   // keyed on its own inputs inside
@@ -1973,6 +2062,8 @@ window.ZH_READY.then(function (Z) {
     else if (d.less) DESC_ROWS = 25;
     else if (d.unfocus) S.focus = null;
     else if (d.mapbuildoff) S.mapBuild = false;
+    else if (d.exsort) S.exSort = d.exsort;
+    else if (d.exmore) EX_ROWS += 25;
     else return false;
     return true;
   }, { keepVeil: true });   // the first render describes every seat in slices; the veil drops when the cards are drawn
