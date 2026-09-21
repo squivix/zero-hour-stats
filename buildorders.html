@@ -80,7 +80,10 @@
   .maprow.draw .maptitle small { font-weight: 400; color: var(--muted); font-size: 14px; }
   .card-h .mapbuild { max-width: 40%; }
   .card-h .mapbuild > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .card-h .mapbuild small { opacity: .75; margin-left: 4px; }   /* inherit the chip's own ink (--accent-ink when pressed), not --muted - grey read invisible on the green chip */
+  .card-h .mapbuild small { opacity: .75; margin-left: 4px; white-space: nowrap; flex: none; }   /* the count and the x on one line, never wrapped (the user, 2026-09-21) */
+  /* the focus chips take the room their row has, the name cut only when it runs out (the user, 2026-09-21: no ellipsis with this much space) */
+  #card-focus .mapbuild, #card-ex .mapbuild { max-width: none; flex: 0 1 auto; min-width: 0; }
+  #card-focus .mapbuild > span:not(.sw), #card-ex .mapbuild > span:not(.sw) { flex: 0 1 auto; min-width: 0; }   /* inherit the chip's own ink (--accent-ink when pressed), not --muted - grey read invisible on the green chip */
   .card-h .snap.back { color: var(--accent); }   /* back out of the one map picked (the user, 2026-09-14): the Map filter cleared, nothing else */
   .maprow.look { margin: 10px 0 2px; }
   #mapspotr, #mapblur, #mapgrain { width: 110px; accent-color: var(--accent); margin: 0; }
@@ -156,6 +159,7 @@
   /* the examples card: the games that played the build in focus, a row per player-game in the Replays tab's list
      idiom - the seat that played it first, the result in a fixed slot, the faction under the name */
   #card-ex[hidden] { display: none; }   /* only with a build in focus (the user, 2026-09-20) */
+  .card-h .mapbuild[hidden] { display: none !important; }   /* .chip's inline-flex outranked [hidden]: the cleared focus chip stayed up (the user, 2026-09-21) */
   #ex .tbl-wrap { max-height: 320px; overflow-y: auto; border: 1px solid var(--line); border-radius: 3px; scrollbar-width: thin; }   /* about eight rows (the user, 2026-09-20: shorter) */
   table.ex thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; box-shadow: 0 1px 0 var(--line); }
   table.ex td.who { text-align: left; }
@@ -292,10 +296,11 @@
     <section class="card" id="card-focus">
       <div class="card-h">
         <h2 class="disp">In Focus <span class="clock" id="clock-focus"></span></h2>
+        <!-- what is in focus as a chip beside the title, its x clearing the focus (the user, 2026-09-21: instead of a Close button) -->
+        <button class="chip mapbuild" id="unfocus" data-unfocus="1" aria-pressed="true" title="clear the focus" hidden></button>
         <div class="spacer"></div>
         <div class="ctl"><span class="lbl">By</span><div class="seg" id="by-4"></div></div>
         <span class="hint">click a chip above: how common it is on its own, and what goes with it &middot; click a row: that build step by step, with the gaps between its steps</span>
-        <button class="chip" data-unfocus="1" id="unfocus" hidden>Close</button>
       </div>
       <div id="focus"></div>
       <div class="foot"><span id="focus-note"></span></div>
@@ -305,7 +310,7 @@
     <section class="card" id="card-ex" hidden>
       <div class="card-h">
         <h2 class="disp">Examples</h2>
-        <span class="chip mapbuild" id="exbuild" aria-pressed="true"></span>
+        <button class="chip mapbuild" id="exbuild" data-unfocus="1" aria-pressed="true" title="clear the focus"></button>
         <div class="spacer"></div>
         <div class="ctl"><span class="lbl">Sort</span><div class="seg" id="exsort"></div></div>
       </div>
@@ -861,6 +866,7 @@ window.ZH_READY.then(function (Z) {
       if (has) withIt.push(s);
     }
     const n = withIt.length;
+    $('unfocus').innerHTML = `<span class="sw" style="--c:${fo.row ? 'var(--accent)' : fo.part === 'units' ? 'var(--p-none)' : fo.part === 'bld' ? 'var(--p-bld)' : fo.part === 'sup' ? 'var(--p-sup)' : fo.part === 'gat' ? 'var(--p-gat)' : fo.part === 'move' ? 'var(--p-move)' : 'var(--p-prod)'}"></span><span>${esc(fo.n)}</span><small>${fmtInt(n)} \u00b7 \u2715</small>`;
     if (!n) {   // a chip that no seat carries any more: the focus clears too
       S.focus = null; Z.persistPage('zh-bo-page', 2, S); $('unfocus').hidden = true;
       for (const c of $('desc').querySelectorAll('.it.focus')) c.classList.remove('focus');
@@ -954,8 +960,7 @@ window.ZH_READY.then(function (Z) {
     const el = $('ex'), note = $('ex-note'), fo = S.focus;
     if (!fo) { el.innerHTML = ''; note.textContent = ''; $('exbuild').innerHTML = ''; return; }   // the card is hidden without a focus
     const withIt = seatsOfFocus(seats, fo);
-    $('exbuild').innerHTML = `<span class="sw" style="--c:var(--accent)"></span><span>${esc(fo.n)}</span><small>${fmtInt(withIt.length)}</small>`;
-    $('exbuild').title = `the ${fo.row ? 'build' : 'chip'} in focus - ${fmtInt(withIt.length)} player-games`;
+    $('exbuild').innerHTML = `<span class="sw" style="--c:var(--accent)"></span><span>${esc(fo.n)}</span><small>${fmtInt(withIt.length)} \u00b7 \u2715</small>`;   // the same chip as In Focus's: its x clears the focus
     if (fo.key !== EX_KEY) { EX_KEY = fo.key; EX_ROWS = EX_PAGE; }   // a new focus starts at the top of its list
     const byDate = (a, b) => (b.g.d || '').localeCompare(a.g.d || '') || (b.g.m || 0) - (a.g.m || 0);
     const byRating = (a, b) => (b.p.e != null ? b.p.e : -1) - (a.p.e != null ? a.p.e : -1) || byDate(a, b);
