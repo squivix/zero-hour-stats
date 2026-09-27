@@ -378,5 +378,626 @@
 "Slth_GLAVehicleTechnical",
 "Slth_GLAVehicleToxinTruck"
 ]
+},
+"sciences": {
+"2": [
+"SCIENCE_PaladinTank",
+"SCIENCE_StealthFighter",
+"SCIENCE_SpyDrone",
+"SCIENCE_Pathfinder",
+"SCIENCE_Paradrop1",
+"SCIENCE_Paradrop2",
+"SCIENCE_Paradrop3",
+"SCIENCE_A10ThunderboltMissileStrike1",
+"SCIENCE_A10ThunderboltMissileStrike2",
+"SCIENCE_A10ThunderboltMissileStrike3",
+"SCIENCE_EmergencyRepair1",
+"SCIENCE_EmergencyRepair2",
+"SCIENCE_EmergencyRepair3",
+"SCIENCE_DaisyCutter",
+"SCIENCE_LeafletDrop",
+"SCIENCE_SpectreGunshipSolo"
+],
+"3": [
+"SCIENCE_RedGuardTraining",
+"SCIENCE_ArtilleryTraining",
+"SCIENCE_NukeLauncher",
+"SCIENCE_ClusterMines",
+"Early_SCIENCE_ChinaCarpetBomb",
+"SCIENCE_ArtilleryBarrage1",
+"SCIENCE_ArtilleryBarrage2",
+"SCIENCE_ArtilleryBarrage3",
+"SCIENCE_CashHack1",
+"SCIENCE_CashHack2",
+"SCIENCE_CashHack3",
+"SCIENCE_EmergencyRepair1",
+"SCIENCE_EmergencyRepair2",
+"SCIENCE_EmergencyRepair3",
+"SCIENCE_Frenzy1",
+"SCIENCE_Frenzy2",
+"SCIENCE_Frenzy3",
+"SCIENCE_EMPPulse"
+],
+"4": [
+"SCIENCE_ScudLauncher",
+"SCIENCE_MarauderTank",
+"SCIENCE_TechnicalTraining",
+"SCIENCE_Hijacker",
+"SCIENCE_RebelAmbush1",
+"SCIENCE_RebelAmbush2",
+"SCIENCE_RebelAmbush3",
+"SCIENCE_CashBounty1",
+"SCIENCE_CashBounty2",
+"SCIENCE_CashBounty3",
+"SCIENCE_EmergencyRepair1",
+"SCIENCE_EmergencyRepair2",
+"SCIENCE_EmergencyRepair3",
+"SCIENCE_AnthraxBomb",
+"SCIENCE_SneakAttack",
+"SCIENCE_GPSScrambler"
+],
+"5": [
+"SCIENCE_SpyDrone",
+"SCIENCE_StealthFighter",
+"SCIENCE_Pathfinder",
+"Early_SCIENCE_LeafletDrop",
+"SCIENCE_Paradrop1",
+"SCIENCE_Paradrop2",
+"SCIENCE_Paradrop3",
+"SCIENCE_A10ThunderboltMissileStrike1",
+"SCIENCE_A10ThunderboltMissileStrike2",
+"SCIENCE_A10ThunderboltMissileStrike3",
+"SCIENCE_EmergencyRepair1",
+"SCIENCE_EmergencyRepair2",
+"SCIENCE_EmergencyRepair3",
+"SCIENCE_SpectreGunship1",
+"SCIENCE_SpectreGunship2",
+"SCIENCE_DaisyCutter",
+"SCIENCE_SpectreGunship3"
+],
+"6": [
+"SCIENCE_SpyDrone",
+"SCIENCE_StealthFighter",
+"SCIENCE_Pathfinder",
+"SCIENCE_Paradrop1",
+"SCIENCE_Paradrop2",
+"SCIENCE_Paradrop3",
+"SCIENCE_A10ThunderboltMissileStrike1",
+"SCIENCE_A10ThunderboltMissileStrike2",
+"SCIENCE_A10ThunderboltMissileStrike3",
+"SCIENCE_EmergencyRepair1",
+"SCIENCE_EmergencyRepair2",
+"SCIENCE_EmergencyRepair3",
+"SCIENCE_DaisyCutter",
+"SCIENCE_LeafletDrop",
+"SCIENCE_SpectreGunshipSolo"
+],
+"7": [
+"SCIENCE_SpyDrone",
+"SCIENCE_AirF_CarpetBomb",
+"Early_SCIENCE_EmergencyRepair1",
+"SCIENCE_Pathfinder",
+"SCIENCE_Paradrop1",
+"SCIENCE_Paradrop2",
+"SCIENCE_Paradrop3",
+"SCIENCE_SpectreGunship1",
+"SCIENCE_SpectreGunship2",
+"Early_SCIENCE_EmergencyRepair2",
+"Early_SCIENCE_EmergencyRepair3",
+"AirF_SCIENCE_A10ThunderboltMissileStrike1",
+"AirF_SCIENCE_A10ThunderboltMissileStrike2",
+"AirF_SCIENCE_A10ThunderboltMissileStrike3",
+"SCIENCE_DaisyCutter",
+"SCIENCE_LeafletDrop",
+"SCIENCE_SpectreGunship3"
+],
+"8": [
+"SCIENCE_RedGuardTraining",
+"SCIENCE_BattlemasterTraining",
+"Early_SCIENCE_EmergencyRepair1",
+"SCIENCE_ClusterMines",
+"SCIENCE_ArtilleryBarrage1",
+"SCIENCE_ArtilleryBarrage2",
+"SCIENCE_ArtilleryBarrage3",
+"SCIENCE_TankParadrop1",
+"SCIENCE_TankParadrop2",
+"SCIENCE_TankParadrop3",
+"Early_SCIENCE_EmergencyRepair2",
+"Early_SCIENCE_EmergencyRepair3",
+"SCIENCE_Frenzy1",
+"SCIENCE_Frenzy2",
+"SCIENCE_Frenzy3",
+"SCIENCE_EMPPulse",
+"SCIENCE_ChinaCarpetBomb"
+],
+"9": [
+"Infa_SCIENCE_RedGuardTraining",
+"SCIENCE_ArtilleryTraining",
+"SCIENCE_NukeLauncher",
+"Early_SCIENCE_Frenzy1",
+"SCIENCE_ClusterMines",
+"Early_SCIENCE_ChinaCarpetBomb",
+"SCIENCE_ArtilleryBarrage1",
+"SCIENCE_ArtilleryBarrage2",
+"SCIENCE_ArtilleryBarrage3",
+"SCIENCE_EmergencyRepair1",
+"SCIENCE_EmergencyRepair2",
+"SCIENCE_EmergencyRepair3",
+"Early_SCIENCE_Frenzy2",
+"Early_SCIENCE_Frenzy3",
+"Infa_SCIENCE_InfantryParadrop1",
+"Infa_SCIENCE_InfantryParadrop2",
+"Infa_SCIENCE_InfantryParadrop3",
+"SCIENCE_EMPPulse"
+],
+"10": [
+"SCIENCE_RedGuardTraining",
+"SCIENCE_ArtilleryTraining",
+"Early_SCIENCE_EmergencyRepair1",
+"SCIENCE_ClusterMines",
+"Nuke_SCIENCE_ChinaCarpetBomb",
+"SCIENCE_ArtilleryBarrage1",
+"SCIENCE_ArtilleryBarrage2",
+"SCIENCE_ArtilleryBarrage3",
+"SCIENCE_CashHack1",
+"SCIENCE_CashHack2",
+"SCIENCE_CashHack3",
+"Early_SCIENCE_EmergencyRepair2",
+"Early_SCIENCE_EmergencyRepair3",
+"SCIENCE_Frenzy1",
+"SCIENCE_Frenzy2",
+"SCIENCE_Frenzy3",
+"SCIENCE_EMPPulse"
+],
+"11": [
+"SCIENCE_ScudLauncher",
+"SCIENCE_MarauderTank",
+"SCIENCE_TechnicalTraining",
+"SCIENCE_RebelAmbush1",
+"SCIENCE_RebelAmbush2",
+"SCIENCE_RebelAmbush3",
+"SCIENCE_CashBounty1",
+"SCIENCE_CashBounty2",
+"SCIENCE_CashBounty3",
+"SCIENCE_EmergencyRepair1",
+"SCIENCE_EmergencyRepair2",
+"SCIENCE_EmergencyRepair3",
+"SCIENCE_AnthraxBomb",
+"SCIENCE_SneakAttack"
+],
+"12": [
+"SCIENCE_ScudLauncher",
+"SCIENCE_MarauderTank",
+"SCIENCE_TechnicalTraining",
+"SCIENCE_RebelAmbush1",
+"SCIENCE_RebelAmbush2",
+"SCIENCE_RebelAmbush3",
+"SCIENCE_CashBounty1",
+"SCIENCE_CashBounty2",
+"SCIENCE_CashBounty3",
+"SCIENCE_EmergencyRepair1",
+"SCIENCE_EmergencyRepair2",
+"SCIENCE_EmergencyRepair3",
+"SCIENCE_AnthraxBomb",
+"SCIENCE_SneakAttack"
+],
+"13": [
+"SCIENCE_TechnicalTraining",
+"Early_SCIENCE_EmergencyRepair1",
+"Slth_SCIENCE_GPSScrambler",
+"SCIENCE_RebelAmbush1",
+"SCIENCE_RebelAmbush2",
+"SCIENCE_RebelAmbush3",
+"SCIENCE_CashBounty1",
+"SCIENCE_CashBounty2",
+"SCIENCE_CashBounty3",
+"Early_SCIENCE_EmergencyRepair2",
+"Early_SCIENCE_EmergencyRepair3",
+"SCIENCE_AnthraxBomb",
+"SCIENCE_SneakAttack"
+]
+},
+"science": {
+"SCIENCE_PaladinTank": {
+"rank": 1,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_StealthFighter": {
+"rank": 1,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_SpyDrone": {
+"rank": 1,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_Pathfinder": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_Paradrop1": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_Paradrop2": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_Paradrop1"
+]
+},
+"SCIENCE_Paradrop3": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_Paradrop2"
+]
+},
+"SCIENCE_A10ThunderboltMissileStrike1": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_A10ThunderboltMissileStrike2": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_A10ThunderboltMissileStrike1"
+]
+},
+"SCIENCE_A10ThunderboltMissileStrike3": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_A10ThunderboltMissileStrike2"
+]
+},
+"SCIENCE_EmergencyRepair1": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_EmergencyRepair2": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_EmergencyRepair1"
+]
+},
+"SCIENCE_EmergencyRepair3": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_EmergencyRepair2"
+]
+},
+"SCIENCE_DaisyCutter": {
+"rank": 5,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_LeafletDrop": {
+"rank": 5,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_SpectreGunshipSolo": {
+"rank": 5,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_RedGuardTraining": {
+"rank": 1,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_ArtilleryTraining": {
+"rank": 1,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_NukeLauncher": {
+"rank": 1,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_ClusterMines": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"Early_SCIENCE_ChinaCarpetBomb": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_ArtilleryBarrage1": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_ArtilleryBarrage2": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_ArtilleryBarrage1"
+]
+},
+"SCIENCE_ArtilleryBarrage3": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_ArtilleryBarrage2"
+]
+},
+"SCIENCE_CashHack1": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_CashHack2": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_CashHack1"
+]
+},
+"SCIENCE_CashHack3": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_CashHack2"
+]
+},
+"SCIENCE_Frenzy1": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_Frenzy2": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_Frenzy1"
+]
+},
+"SCIENCE_Frenzy3": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_Frenzy2"
+]
+},
+"SCIENCE_EMPPulse": {
+"rank": 5,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_ScudLauncher": {
+"rank": 1,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_MarauderTank": {
+"rank": 1,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_TechnicalTraining": {
+"rank": 1,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_Hijacker": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_RebelAmbush1": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_RebelAmbush2": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_RebelAmbush1"
+]
+},
+"SCIENCE_RebelAmbush3": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_RebelAmbush2"
+]
+},
+"SCIENCE_CashBounty1": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_CashBounty2": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_CashBounty1"
+]
+},
+"SCIENCE_CashBounty3": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_CashBounty2"
+]
+},
+"SCIENCE_AnthraxBomb": {
+"rank": 5,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_SneakAttack": {
+"rank": 5,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_GPSScrambler": {
+"rank": 5,
+"cost": 1,
+"pre": []
+},
+"Early_SCIENCE_LeafletDrop": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_SpectreGunship1": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_SpectreGunship2": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_SpectreGunship1"
+]
+},
+"SCIENCE_SpectreGunship3": {
+"rank": 5,
+"cost": 1,
+"pre": [
+"SCIENCE_SpectreGunship2"
+]
+},
+"SCIENCE_AirF_CarpetBomb": {
+"rank": 1,
+"cost": 1,
+"pre": []
+},
+"Early_SCIENCE_EmergencyRepair1": {
+"rank": 1,
+"cost": 1,
+"pre": []
+},
+"Early_SCIENCE_EmergencyRepair2": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"Early_SCIENCE_EmergencyRepair1"
+]
+},
+"Early_SCIENCE_EmergencyRepair3": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"Early_SCIENCE_EmergencyRepair2"
+]
+},
+"AirF_SCIENCE_A10ThunderboltMissileStrike1": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"AirF_SCIENCE_A10ThunderboltMissileStrike2": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"AirF_SCIENCE_A10ThunderboltMissileStrike1"
+]
+},
+"AirF_SCIENCE_A10ThunderboltMissileStrike3": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"AirF_SCIENCE_A10ThunderboltMissileStrike2"
+]
+},
+"SCIENCE_BattlemasterTraining": {
+"rank": 1,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_TankParadrop1": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"SCIENCE_TankParadrop2": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_TankParadrop1"
+]
+},
+"SCIENCE_TankParadrop3": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"SCIENCE_TankParadrop2"
+]
+},
+"SCIENCE_ChinaCarpetBomb": {
+"rank": 5,
+"cost": 1,
+"pre": []
+},
+"Infa_SCIENCE_RedGuardTraining": {
+"rank": 1,
+"cost": 1,
+"pre": []
+},
+"Early_SCIENCE_Frenzy1": {
+"rank": 1,
+"cost": 1,
+"pre": []
+},
+"Early_SCIENCE_Frenzy2": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"Early_SCIENCE_Frenzy1"
+]
+},
+"Early_SCIENCE_Frenzy3": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"Early_SCIENCE_Frenzy2"
+]
+},
+"Infa_SCIENCE_InfantryParadrop1": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"Infa_SCIENCE_InfantryParadrop2": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"Infa_SCIENCE_InfantryParadrop1"
+]
+},
+"Infa_SCIENCE_InfantryParadrop3": {
+"rank": 3,
+"cost": 1,
+"pre": [
+"Infa_SCIENCE_InfantryParadrop2"
+]
+},
+"Nuke_SCIENCE_ChinaCarpetBomb": {
+"rank": 3,
+"cost": 1,
+"pre": []
+},
+"Slth_SCIENCE_GPSScrambler": {
+"rank": 3,
+"cost": 1,
+"pre": []
+}
 }
 }

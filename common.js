@@ -136,10 +136,10 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
   const PLAYER_BY_ID = new Map(PLAYERS.map(p => [p.id, p]));
   const pidOf = p => p.pl == null ? -1 : D.players[p.pl].i;
   let plQuery = '', oplQuery = '', whoQ = { p: [], f: [], e: ['', ''], t: null }, whoOpen = null, whoRefocus = false;   // the comboboxes' text, by list (p = player, f = faction, per finder; e = the event box) ; whoOpen = the list that is down, 'p:0' / 'f:1' / 'e:0'
-  // games under 3 min are lag tests and quits, never counted (user, 2026-09-12: was 2). The slider runs from
-  // that floor to the longest game in the data, rounded up to a half hour; the top
-  // end means no upper bound.
-  const LEN_MIN = 3;
+  // games under the floor are lag tests and quits, never counted (user, 2026-09-12: 3 min, was 2). The library
+  // export carries its own (its --min-minutes floor as len_min; 3 when the dataset says nothing). The slider runs
+  // from that floor to the longest game in the data, rounded up to a half hour; the top end means no upper bound.
+  const LEN_MIN = D.len_min != null ? +D.len_min : 3;
   const LEN_MAX = 180;   // the slider's right end means no upper bound, so the few games past 3 hours only come in there
   // marks on the length slider a thumb snaps to when it comes close
   const LEN_MARKS = [[60, '1 h'], [120, '2 h']].filter(([m]) => m < LEN_MAX), LEN_SNAP = 3;
@@ -1102,12 +1102,13 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     const cap = document.createElement('div'); cap.className = 'snap-cap';
     cap.innerHTML = `<span>${esc(filterText())}</span><span>Zero Hour Stats \u00b7 ${esc(pageName())} \u00b7 ${today()}</span>`;
     card.appendChild(cap);
+    card.classList.add('snapping');   // a page can uncap a scrolling pane for the capture (.snapping ...): the image shows all of it
     btn.disabled = true; btn.textContent = '\u2026';
     try {
       const canvas = await rasterise(card);
       await saveFile(`zh-${slug(pageName())}-${slug(title)}-${today()}.png`, await toBlob(canvas, 'image/png'));
     } catch (e) { console.error(e); alert('image export failed: ' + e.message); }
-    finally { cap.remove(); btn.disabled = false; btn.textContent = 'PNG'; }
+    finally { cap.remove(); card.classList.remove('snapping'); btn.disabled = false; btn.textContent = 'PNG'; }
   }
   async function exportPdf(btn, raster) {
     if (!raster && window.self === window.top) { window.print(); return; }   // standalone: the browser's own dialog, vector text
@@ -1510,6 +1511,7 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     chip, seg, facet, renderRail, renderActive, bind, tips, showTip, moveTip, hideTip, exportCard, exportPdf,
     mapFacetControls, mapFacetHit, mapFacetAct, mapFacts, facetCount, mapHit, onMapFacet: null,   // the map narrowing, for a page that draws it too (the map card's pick)
     later, task, chunked, working, workingAt, memo, veilDown, progressHTML, progressSet, strataIds, STRATA_URL,
+    BUILD: B,   // buildable.json as loaded (null without it): the menus, and the generals' powers (sciences / science)
   };
   window.ZH = api;
   if (window.performance && performance.mark) performance.mark('zh-indexed');   // seats and templates precomputed
