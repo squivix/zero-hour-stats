@@ -103,7 +103,7 @@
 <script>document.querySelector("#loading .spin").style.animationDelay = -(Date.now() % 800) + "ms"; window.ZH_DATASET = 'library'; window.ZH_COLS = [];</script>
 <script src="config.js?v=ecbf1d2c"></script>
 <script src="data.js?v=66bfc719"></script>
-<script src="common.js?v=e127a3c9"></script>
+<script src="common.js?v=b329a812"></script>
 <script>
 window.ZH_READY.then(function (Z) {
   const { D, F, CLASSES, CLS_COLOR, TOTAL_PG, TOTAL_GAMES, $, esc, fmtPct, fmtInt, fmtMoney, fmtMoneyK, seg } = Z;
@@ -152,6 +152,7 @@ window.ZH_READY.then(function (Z) {
           if (t.challenge) continue;   // Boss / challenge-mode tech
           const ci = unitsView ? t.ci : NC - 1;
           if (unitsView && !clsOn[ci]) continue;
+          if (unitsView && !t.own) continue;   // on no faction's menu: a pilot out of a wreck, a power's Spectre Gunship - not a unit anyone made (the user, 2026-09-27)
           const captured = !((t.own >> p.f) & 1);   // built from a stolen structure: listed apart, and only for a single faction
           if (captured && !showCap) continue;
           const sidx = captured ? ti + NT : ti;
@@ -294,7 +295,7 @@ window.ZH_READY.then(function (Z) {
   function loadTime() {
     if (timeLoading) return timeLoading;
     timeLoading = new Promise(res => {
-      try { timeW = new Worker('timeworker.js?v=ee2f3f5a'); } catch (e) { timeErr = e; res(); return; }
+      try { timeW = new Worker('timeworker.js?v=1d16e7ed'); } catch (e) { timeErr = e; res(); return; }
       timeW.onerror = e => { if (!TIME) { timeErr = new Error(e.message || 'the timeline worker failed'); res(); } for (const r of timeReply.values()) r({ type: 'error', message: e.message || 'the timeline worker failed' }); timeReply.clear(); };
       timeW.onmessage = e => {
         const d = e.data;

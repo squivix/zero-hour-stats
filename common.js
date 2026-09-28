@@ -1503,6 +1503,19 @@ window.ZH_READY = Promise.all([window.ZH_DATA, window.ZH_BUILD, window.ZH_MAPINF
     });
   }
 
+  // a seat's units out of production (ul, the opening column) keep only what some faction's build menu offers
+  // (t.own, from buildable.json): a pilot out of a wreck and a power's Spectre Gunship are not production, though
+  // an export before 2026-09-27 lists them (the user, 2026-09-27); the column may come after the first paint
+  const prodOnly = () => {
+    for (const g of D.games) for (const p of g.p) {
+      const ul = p.ul; if (!ul || ul._prod) continue;
+      let w = 0; for (let j = 0; j < ul.length; j += 2) if (D.templates[ul[j]].own) { ul[w++] = ul[j]; ul[w++] = ul[j + 1]; }
+      ul.length = w; ul._prod = 1;
+    }
+  };
+  prodOnly();
+  if (D.later && D.later.opening) D.later.opening.then(prodOnly);
+
   const api = {
     D, F, CLASSES, CLS_INDEX, CLS_COLOR, SIDES, FACS, SOURCES, EVENTS, MAPS, ELO, eloBucket, eloId, HIGH_ELO, LOW_ELO, highLevel, lowLevel, LEVELS, MERGE,
     LEN_MIN, LEN_MAX, TOTAL_PG, TOTAL_GAMES, CASH, cashKey, FMTS, shortName, NICK, searchText, searchHit,

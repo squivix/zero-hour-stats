@@ -68,7 +68,7 @@ function count(o) {
     const w = thirds ? end / 3 : BS;
     for (let j = 0; j < ul.length; j += 4) {
       const ti = ul[j];
-      if (tch[ti] || !clsOn[tci[ti]]) continue;
+      if (tch[ti] || !clsOn[tci[ti]] || !town[ti]) continue;   // !town: on no faction's menu (a pilot, a power's Spectre Gunship): not a unit anyone made
       const captured = !((town[ti] >> f) & 1);
       if (captured && !showCap) continue;
       const gi = captured ? gid[ti] + ng : gid[ti];
@@ -83,7 +83,7 @@ function count(o) {
   const collectMade = (ul, f, end) => {
     for (let j = 0; j < ul.length; j += 3) {
       const ti = ul[j];
-      if (tch[ti] || !clsOn[tci[ti]]) continue;
+      if (tch[ti] || !clsOn[tci[ti]] || !town[ti]) continue;
       const captured = !((town[ti] >> f) & 1);
       if (captured && !showCap) continue;
       const gi = captured ? gid[ti] + ng : gid[ti], k = ul[j + 1], n = ul[j + 2];

@@ -13,9 +13,9 @@
   /* a described build or a structure opening: a run of chips, then the numbers */
   .seq-rows { display: flex; flex-direction: column; gap: 4px; }
   #desc.more { overflow-y: auto; padding-right: 4px; }   /* past the top 25 the pane keeps its height and scrolls */
-  #timings { max-height: 560px; overflow-y: auto; padding-right: 4px; }   /* the Timings card: capped, scrolls (the user, 2026-09-27) */
-  #timings > .axis { position: sticky; top: 0; z-index: 1; background: var(--surface); }
-  #timings.full, .snapping #timings, body.printing #timings { max-height: none; overflow: visible; }   /* Full, and every PNG / PDF: the whole list */
+  .tmlist { max-height: 560px; overflow-y: auto; padding-right: 4px; }   /* the Building / Unit Timings cards: capped, scrolls (the user, 2026-09-27) */
+  .tmlist > .axis { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+  .tmlist.full, .snapping .tmlist, body.printing .tmlist { max-height: none; overflow: visible; }   /* Full, and every PNG / PDF: the whole list */
   .seq-more { display: flex; gap: 8px; justify-content: center; padding: 8px 0 2px; }   /* the last item of the list */
   /* the confounders callout, as on the Win rates tab's build-order card: shown until one matchup is picked */
   #bohint { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; padding: 10px 12px; border-radius: 4px; background: color-mix(in srgb, var(--s-eco) 14%, var(--surface)); border: 1px solid color-mix(in srgb, var(--s-eco) 45%, var(--line-strong)); }
@@ -29,7 +29,7 @@
   .fx .nx .name span { white-space: normal; line-height: 1.25; }   /* the full name, on two lines when long */
   .fx .nx:hover { background: none; }
   .fx .sub { color: var(--muted); font-size: 12px; margin-top: 8px; }
-  /* the supply and derrick timings in the top bar: the Timings card's lanes, small - one per supply / derrick in order */
+  /* the supply and derrick timings in the top bar: the Building Timings card's lanes, small - one per supply / derrick in order */
   /* two rows: the three figures, then the two timing cards sharing the second (the user, 2026-09-14) */
   #tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   #tiles .tile { grid-column: span 2; }
@@ -243,7 +243,7 @@
   .lane .tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
   .tm.inst .name span { color: var(--muted); padding-left: 16px; }
   .tmx { padding: 0 0 4px 16px; }   /* a structure's show more / fewer, under its lanes */
-  .tmx button { font-size: 11px; padding: 1px 8px; min-height: 0; }   /* the Timings card's all-instances view: a structure's 2nd, 3rd ... under its first */
+  .tmx button { font-size: 11px; padding: 1px 8px; min-height: 0; }   /* the Timings cards' all-instances view: a structure's 2nd, 3rd ... under its first */
   .tm .v { text-align: right; font-size: 13px; white-space: nowrap; }
   .tm .v small { color: var(--muted); font-size: 11px; margin-left: 4px; }
   .axis { display: grid; grid-template-columns: 190px minmax(0, 1fr) 120px; gap: 10px; margin-bottom: 4px; }
@@ -383,14 +383,14 @@
 
     <section class="card">
       <div class="card-h">
-        <h2 class="disp">Timings</h2>
+        <h2 class="disp">Building Timings</h2>
         <div class="spacer"></div>
         <div class="ctl"><div class="seg" id="tmview"></div></div>
         <div class="ctl" id="instance-ctl"><span class="lbl">Instance</span><div class="seg" id="instance"></div></div>
         <div class="ctl"><div class="seg" id="tmmode"></div></div>
         <div class="ctl"><div class="seg" id="tmfull"></div></div>
       </div>
-      <div id="timings"></div>
+      <div id="timings" class="tmlist"></div>
       <div class="foot"><span id="tm-note"></span></div>
     </section>
 
@@ -398,6 +398,20 @@
       <div class="card-h"><h2 class="disp">Base at the Mark</h2><div class="spacer"></div><span class="hint">mean number placed by each moment of the window</span></div>
       <div class="marks" id="marks"></div>
       <div class="foot"><span id="mk-note"></span></div>
+    </section>
+
+    <section class="card">
+      <div class="card-h">
+        <h2 class="disp">Unit Timings</h2>
+        <div class="spacer"></div>
+        <div class="ctl"><div class="seg" id="utcls"></div></div>
+        <div class="ctl"><div class="seg" id="utview"></div></div>
+        <div class="ctl" id="uinstance-ctl"><span class="lbl">Instance</span><div class="seg" id="uinstance"></div></div>
+        <div class="ctl"><div class="seg" id="utmode"></div></div>
+        <div class="ctl"><div class="seg" id="utfull"></div></div>
+      </div>
+      <div id="utimings" class="tmlist"></div>
+      <div class="foot"><span id="ut-note"></span></div>
     </section>
 
     <section class="card">
@@ -426,7 +440,7 @@
 <script>document.querySelector("#loading .spin").style.animationDelay = -(Date.now() % 800) + "ms"; window.ZH_DATASET = 'library'; window.ZH_COLS = ['opening']; window.ZH_COLS_LATER = ['map'];</script>
 <script src="config.js?v=ecbf1d2c"></script>
 <script src="data.js?v=66bfc719"></script>
-<script src="common.js?v=e127a3c9"></script>
+<script src="common.js?v=b329a812"></script>
 <script src="plays.js?v=96d7a72d"></script>
 <script src="builds.js?v=097b47b0"></script>
 <script src="terrain.js?v=8fc37e0f"></script>
@@ -461,7 +475,7 @@ window.ZH_READY.then(function (Z) {
   const WINDOWS = [[120, '2:00'], [180, '3:00'], [240, '4:00'], [300, '5:00']];
   const DEPTHS = [4, 6, 8, 10];
   const INSTANCES = [[1, '1st'], [2, '2nd'], [3, '3rd'], [4, '4th'], [5, '5th'], [6, '6th'], [7, '7th'], [8, '8th'], [9, '9th'], [10, '10th']];
-  const DEFAULT = { by: 180, fu: 2, cls: 'infantry', move: 180, fwd: 50, parts: ['bld', 'sup', 'prod', 'move', 'units'], table: false, sort: 'games', window: 300, k: 6, prefix: [], instance: 1, tmTable: false, tmAll: true, tmOpen: [], tmFull: false,
+  const DEFAULT = { by: 180, fu: 2, cls: 'infantry', move: 180, fwd: 50, parts: ['bld', 'sup', 'prod', 'move', 'units'], table: false, sort: 'games', window: 300, k: 6, prefix: [], instance: 1, tmTable: false, tmAll: true, tmOpen: [], tmFull: false, utInstance: 1, utTable: false, utAll: true, utOpen: [], utFull: false, utCls: 'all',
     mapKinds: ['supply', 'production', 'defense'], mapT: [], mapOpen: null, mapDraw: 'heat', mapFlow: 'lines', mapGrain: 28, mapPal: 'relief', mapTint: 'grey', mapSpotR: 6, mapBlur: 12, mapSp: -1, mapBy: 180, focus: null, mapBuild: true, exSort: 'rating', lvTab: 'levels' };   // the map card: the kinds shown by default (Supply Centers, Production Buildings, Defences - the user, 2026-09-14; CC is off besides: every game puts one on the same cell at 0:00, and it hid the rest), the structures shown (empty = every one), the spawn (-1 = all)
   const S = Z.loadPage('zh-bo-page', 2, DEFAULT);
   S.fwd = DEFAULT.fwd;   // the forward line is fixed (the control went, 2026-09-14)
@@ -784,7 +798,7 @@ window.ZH_READY.then(function (Z) {
   // production (the starting cash's), the first units out of production, the derricks a capture was ordered on -
   // each value with its share of the selection and its win rate, the same clock as the card above
   const FUS = [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6'], [8, '8'], [10, '10']];
-  // when the first, second, third ... supply is placed / derrick is capture-ordered, as the Timings card draws it
+  // when the first, second, third ... supply is placed / derrick is capture-ordered, as the Building Timings card draws it
   // (the user, 2026-09-14): band = middle half of the players who have that one inside the window, mark = median
   const ORD = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
   function lanes(word, lists, N, extra) {   // extra: [{name, t: []}] lanes ahead of the ordinal ones
@@ -1141,11 +1155,30 @@ window.ZH_READY.then(function (Z) {
     Z.tips($('next'), '.nx', el => { const r = rows[+el.dataset.i]; return `<b>${esc(r.it.n)}</b> <span class="d">\u00b7 next for ${fmtInt(r.n)} of ${fmtInt(n)}</span>${r.t.length ? `<div class="d">median clock ${fmtT(median(r.t))} \u00b7 costs ${money(median(r.cost))}${r.left.length ? `, leaving ${money(median(r.left))} of the start` : ''}</div>` : ''}`; });
     $('next-note').textContent = `share of the ${fmtInt(n)} player-games on this path whose next structure is this one, inside ${fmtT(S.window)} \u00b7 "nothing more" = no further structure before the window ends \u00b7 click a structure to extend the path \u00b7 cash: structures on the path at their sticker price (medians; units and dozers not counted), what is left of the starting cash goes below zero once the supplies pay for it`;
   }
-  // every instance at once (the default since 2026-09-27, the user: "like the top supplies / oils do"): each structure's
-  // 1st, 2nd ... lanes together, the structures in the order their first one goes up; By instance = one nth at a time
-  const TM_MAX = INSTANCES.length, TM_FEW = 3;   // all instances: the first three of each structure unless its Show more is open (S.tmOpen: item keys)
-  function renderTimings(seats) {
-    const N = seats.length, by = new Map(), all = S.tmAll, inst = S.instance;
+  // every instance at once (the default since 2026-09-27, the user: "like the top supplies / oils do"): each item's
+  // 1st, 2nd ... lanes together, the items in the order their first one comes; By instance = one nth at a time.
+  // Two cards draw this the same way (the user, 2026-09-27: "the same exact thing"): Building Timings over the
+  // structures placed (and fakes made real), Unit Timings over the units out of production (the seat's ul, to 5:00)
+  const TM_MAX = INSTANCES.length, TM_FEW = 3;   // all instances: the first three of each item unless its Show more is open
+  const TMC = {
+    bld: { id: 'timings', note: 'tm-note', all: 'tmAll', inst: 'instance', table: 'tmTable', open: 'tmOpen', attr: 'tmopen', head: 'Structure', noun: 'structure',
+      empty: 'Nothing placed often enough to time.',
+      each(s, add) { for (let j = 0; j < s.items.length; j++) add(s.items[j], s.times[j], false); for (const [it, t] of s.real) add(it, t, true); },   // the fakes made real, counted the same way
+      verb: r => r.real ? 'order it' : 'place one',
+      notes: nth => [`when each one is placed - the 1st, then the 2nd, 3rd ... of the same structure under it: band = middle half of the players who have that one, mark = median \u00b7 lanes placed by at least 3% of the selection, structures in the order their first goes up \u00b7 a GLA fake made real is timed by its Become Real order`,
+        k => `when the ${nth(k)} one is placed: band = middle half of the players who have it, mark = median \u00b7 structures placed by at least 3% of the selection \u00b7 a GLA fake made real is timed by its Become Real order, the ${nth(k)} fake of the kind`] },
+    unit: { id: 'utimings', note: 'ut-note', all: 'utAll', inst: 'utInstance', table: 'utTable', open: 'utOpen', attr: 'utopen', head: 'Unit', noun: 'unit',
+      empty: 'No unit comes out often enough to time.',
+      each(s, add) {   // the class buttons: one class, or every unit (All)
+        const ul = s.p.ul, W = S.window, cls = S.utCls === 'all' ? null : S.utCls;
+        if (ul) for (let j = 0; j < ul.length; j += 2) { if (ul[j + 1] > W) continue; const it = itemOfT(ul[j]); if (!cls || it.kind === cls) add(it, ul[j + 1], false); }
+      },
+      verb: () => 'have one out',
+      notes: nth => [`when each one comes out of production - the 1st, then the 2nd, 3rd ... of the same unit under it: band = middle half of the players who have that one, mark = median \u00b7 lanes at least 3% of the selection reach, units in the order their first comes out`,
+        k => `when the ${nth(k)} one comes out of production: band = middle half of the players who have it, mark = median \u00b7 units at least 3% of the selection have`] },
+  };
+  function renderTimings(seats, C) {
+    const N = seats.length, by = new Map(), all = S[C.all], inst = S[C.inst];
     const add = (it, t, real) => {   // the seat's nth of the item: a counter on the item, stamped with the seat (a Map per seat was most of this card)
       if (it._ts !== add.s) { it._ts = add.s; it._tc = 0; }
       const k = ++it._tc; if (k > TM_MAX || (!all && k !== inst)) return;
@@ -1154,40 +1187,35 @@ window.ZH_READY.then(function (Z) {
       while (r.ts.length < k) r.ts.push([]);
       r.ts[k - 1].push(t);
     };
-    for (const s of seats) {
-      add.s = s;
-      for (let j = 0; j < s.items.length; j++) add(s.items[j], s.times[j], false);
-      for (const [it, t] of s.real) add(it, t, true);   // the fakes made real, counted the same way
-    }
-    const MIN = Math.max(5, N * .03), rows = [];
-    if (!Array.isArray(S.tmOpen)) S.tmOpen = [];
-    const open = new Set(S.tmOpen);
+    for (const s of seats) { add.s = s; C.each(s, add); }
+    const MIN = Math.max(5, N * .03), rows = [], el = $(C.id);
+    if (!Array.isArray(S[C.open])) S[C.open] = [];
+    const open = new Set(S[C.open]);
     const items = [...by.values()].filter(r => (r.ts[all ? 0 : inst - 1] || []).length >= MIN)
       .map(r => ({ ...r, q0: quart(r.ts[all ? 0 : inst - 1]) })).sort((a, b) => a.q0[1] - b.q0[1]);
     for (const r of items) {
       if (!all) { rows.push({ it: r.it, real: r.real, k: inst, t: r.ts[inst - 1], q: r.q0 }); continue; }
-      let n = 0; while (n < r.ts.length && r.ts[n].length >= MIN) n++;   // the lanes the structure has
+      let n = 0; while (n < r.ts.length && r.ts[n].length >= MIN) n++;   // the lanes the item has
       const shown = n > TM_FEW && !open.has(r.it.key) ? TM_FEW : n;
       for (let k = 1; k <= shown; k++) { const t = r.ts[k - 1]; rows.push({ it: r.it, real: r.real, k, t, q: k === 1 ? r.q0 : quart(t), sub: k > 1, last: k === shown && n > TM_FEW ? n - shown : null }); }
     }
-    if (!rows.length) { $('timings').innerHTML = '<div class="empty">Nothing placed often enough to time.</div>'; $('tm-note').textContent = ''; return; }
+    if (!rows.length) { el.innerHTML = `<div class="empty">${C.empty}</div>`; $(C.note).textContent = ''; return; }
     const W = S.window, pct = v => (v / W * 100).toFixed(2) + '%', nth = k => ['first', 'second', 'third'][k - 1] || INSTANCES[k - 1][1];
     const ticks = W <= 120 ? [30, 60, 90] : W <= 180 ? [30, 60, 90, 120, 150] : [60, 120, 180, 240];
-    if (S.tmTable) {
-      $('timings').innerHTML = `<div class="tbl-wrap"><table><thead><tr><th class="l">Structure</th>${all ? '<th>Instance</th>' : ''}<th>Have It</th><th>Share</th><th>25%</th><th>Median</th><th>75%</th></tr></thead><tbody>${rows.map(r =>
+    if (S[C.table]) {
+      el.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th class="l">${C.head}</th>${all ? '<th>Instance</th>' : ''}<th>Have It</th><th>Share</th><th>25%</th><th>Median</th><th>75%</th></tr></thead><tbody>${rows.map(r =>
         `<tr><td class="l">${esc(r.it.n)}</td>${all ? `<td>${INSTANCES[r.k - 1][1]}</td>` : ''}<td>${fmtInt(r.t.length)}</td><td>${fmtPct(r.t.length / N)}</td><td>${fmtT(r.q[0])}</td><td>${fmtT(r.q[1])}</td><td>${fmtT(r.q[2])}</td></tr>`).join('')}</tbody></table></div>`;
     } else {
-      $('timings').innerHTML = `<div class="axis"><div></div><div class="ticks">${ticks.map(t => `<span style="left:${pct(t)}">${fmtT(t)}</span>`).join('')}</div><div></div></div>` +
+      el.innerHTML = `<div class="axis"><div></div><div class="ticks">${ticks.map(t => `<span style="left:${pct(t)}">${fmtT(t)}</span>`).join('')}</div><div></div></div>` +
         rows.map((r, i) => `<div class="tm${r.sub ? ' inst' : ''}" data-i="${i}" style="--c:${r.it.c}">
           <div class="name">${r.sub ? '' : '<i></i>'}<span title="${esc(rawsOf(r.it))}">${r.sub ? INSTANCES[r.k - 1][1] : esc(r.it.n)}</span></div>
           <div class="lane">${ticks.map(t => `<div class="tick" style="left:${pct(t)}"></div>`).join('')}<div class="band" style="left:${pct(r.q[0])};width:${pct(Math.max(0, r.q[2] - r.q[0]))}"></div><div class="med" style="left:${pct(r.q[1])}"></div></div>
           <div class="v">${fmtT(r.q[1])}<small>${fmtPct(r.t.length / N)} have it</small></div></div>`
-          + (r.last == null ? '' : `<div class="tmx"><button class="chip" data-tmopen="${esc(r.it.key)}">${r.last ? `Show ${r.last} more` : `Show the first ${TM_FEW}`}</button></div>`)).join('');
-      Z.tips($('timings'), '.tm', el => { const r = rows[+el.dataset.i]; return `<b>${esc(r.it.n)}</b> <span class="d">\u00b7 ${nth(r.k)} one</span><table><tr><th></th><th>Clock</th></tr><tr><th class="l">25%</th><td>${fmtT(r.q[0])}</td></tr><tr><th class="l">Median</th><td>${fmtT(r.q[1])}</td></tr><tr><th class="l">75%</th><td>${fmtT(r.q[2])}</td></tr></table><div class="d">${fmtInt(r.t.length)} player-games ${r.real ? 'order it' : 'place one'} inside the window</div>`; });
+          + (r.last == null ? '' : `<div class="tmx"><button class="chip" data-${C.attr}="${esc(r.it.key)}">${r.last ? `Show ${r.last} more` : `Show the first ${TM_FEW}`}</button></div>`)).join('');
+      Z.tips(el, '.tm', e => { const r = rows[+e.dataset.i]; return `<b>${esc(r.it.n)}</b> <span class="d">\u00b7 ${nth(r.k)} one</span><table><tr><th></th><th>Clock</th></tr><tr><th class="l">25%</th><td>${fmtT(r.q[0])}</td></tr><tr><th class="l">Median</th><td>${fmtT(r.q[1])}</td></tr><tr><th class="l">75%</th><td>${fmtT(r.q[2])}</td></tr></table><div class="d">${fmtInt(r.t.length)} player-games ${C.verb(r)} inside the window</div>`; });
     }
-    $('tm-note').textContent = all
-      ? `when each one is placed - the 1st, then the 2nd, 3rd ... of the same structure under it: band = middle half of the players who have that one, mark = median \u00b7 lanes placed by at least 3% of the selection, structures in the order their first goes up \u00b7 a GLA fake made real is timed by its Become Real order`
-      : `when the ${nth(inst)} one is placed: band = middle half of the players who have it, mark = median \u00b7 structures placed by at least 3% of the selection \u00b7 a GLA fake made real is timed by its Become Real order, the ${nth(inst)} fake of the kind`;
+    const [allNote, oneNote] = C.notes(nth);
+    $(C.note).textContent = all ? allNote : oneNote(inst);
   }
   function renderMarks(seats) {
     const N = seats.length, W = S.window, STEPS = 40, step = W / STEPS;
@@ -1973,6 +2001,13 @@ window.ZH_READY.then(function (Z) {
     seg($('tmview'), [['all', 'All instances'], ['one', 'By instance']], S.tmAll ? 'all' : 'one', 'data-tmview');
     seg($('tmfull'), [['scroll', 'Scroll'], ['full', 'Full']], S.tmFull ? 'full' : 'scroll', 'data-tmfull');
     $('timings').classList.toggle('full', !!S.tmFull);
+    seg($('utcls'), [['all', 'All'], ['infantry', 'Infantry'], ['vehicle', 'Vehicles'], ['aircraft', 'Aircraft']], S.utCls, 'data-utcls');
+    seg($('utview'), [['all', 'All instances'], ['one', 'By instance']], S.utAll ? 'all' : 'one', 'data-utview');
+    seg($('utfull'), [['scroll', 'Scroll'], ['full', 'Full']], S.utFull ? 'full' : 'scroll', 'data-utfull');
+    $('utimings').classList.toggle('full', !!S.utFull);
+    $('uinstance-ctl').style.display = S.utAll ? 'none' : '';
+    seg($('uinstance'), INSTANCES, S.utInstance, 'data-uinstance');
+    seg($('utmode'), [['bands', 'Bands'], ['table', 'Table']], S.utTable ? 'table' : 'bands', 'data-utmode');
     $('instance-ctl').style.display = S.tmAll ? 'none' : '';
     seg($('instance'), INSTANCES, S.instance, 'data-instance');
     seg($('lvtab'), LV_TABS, S.lvTab, 'data-lvtab');
@@ -2076,7 +2111,8 @@ window.ZH_READY.then(function (Z) {
     const pre = S.prefix.join(',');
     card('openings', [sk, S.k, pre, S.seqTable].join('|'), ['seqs', 'seq-note'], () => renderOpenings(seats), { get: () => SEQ, set: v => { SEQ = v; } });
     card('next', [sk, pre].join('|'), ['prefix', 'next', 'next-note'], () => renderNext(seats));
-    card('timings', [sk, S.instance, S.tmTable, S.tmAll, (S.tmOpen || []).join(',')].join('|'), ['timings', 'tm-note'], () => renderTimings(seats));
+    card('timings', [sk, S.instance, S.tmTable, S.tmAll, (S.tmOpen || []).join(',')].join('|'), ['timings', 'tm-note'], () => renderTimings(seats, TMC.bld));
+    card('utimings', [sk, S.utCls, S.utInstance, S.utTable, S.utAll, (S.utOpen || []).join(',')].join('|'), ['utimings', 'ut-note'], () => renderTimings(seats, TMC.unit));
     card('marks', sk, ['marks', 'mk-note'], () => renderMarks(seats));
     card('levels', [sk, S.lvTab].join('|'), ['levels', 'lv-note'], () => renderLevels(seats));
     card('trio', sk, ['trio'], () => renderTrio(seats));
@@ -2104,6 +2140,12 @@ window.ZH_READY.then(function (Z) {
     else if (d.seqmode) S.seqTable = d.seqmode === 'table';
     else if (d.tmview) S.tmAll = d.tmview === 'all';
     else if (d.tmfull) S.tmFull = d.tmfull === 'full';
+    else if (d.utcls) S.utCls = d.utcls;
+    else if (d.utview) S.utAll = d.utview === 'all';
+    else if (d.utfull) S.utFull = d.utfull === 'full';
+    else if (d.uinstance) S.utInstance = +d.uinstance;
+    else if (d.utmode) S.utTable = d.utmode === 'table';
+    else if (d.utopen) S.utOpen = (S.utOpen || []).includes(d.utopen) ? S.utOpen.filter(k => k !== d.utopen) : [...(S.utOpen || []), d.utopen];
     else if (d.tmopen) S.tmOpen = (S.tmOpen || []).includes(d.tmopen) ? S.tmOpen.filter(k => k !== d.tmopen) : [...(S.tmOpen || []), d.tmopen];
     else if (d.instance) S.instance = +d.instance;
     else if (d.lvtab) S.lvTab = d.lvtab;
